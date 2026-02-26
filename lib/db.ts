@@ -1,4 +1,4 @@
-import { collection, query, orderBy } from "firebase/firestore";
+import { collection, query, orderBy, where } from "firebase/firestore";
 import { db } from "./firebase";
 import { getCachedData } from "./indexedDB";
 
@@ -13,9 +13,11 @@ export async function getCachedTodos(userId: string) {
 
 export async function getCachedTasks(userId: string) {
   const q = query(
-      collection(db, "users", userId, "tasks"),
-      orderBy("createdAt", "desc")
+    collection(db, "tasks"),
+    where("assignedTo", "==", userId),
+    orderBy("createdAt", "desc")
   );
   return getCachedData(q);
 }
+
 

@@ -5,65 +5,64 @@ import { ProfileImageUploader } from "./ProfileImageUploader";
 import { CalendarDays, Mail } from "lucide-react";
 
 export function ProfileCard() {
-  const { user } = useAuth();
-  
-  // Create a join date string (mocked as user creation time usually not available in basic user object without admin SDK or extra calls)
-  // But we can just use current year or leave it out if not essential. Let's use a nice reliable placeholder or real data if we had it.
-  const joinDate = user?.metadata?.creationTime 
-    ? new Date(user.metadata.creationTime).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-    : "Member";
+    const { user } = useAuth();
 
-  return (
-    <div className="bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden">
-      {/* Decorative Header */}
-      <div className="h-24 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
-      
-      <div className="px-6 pb-6 relative">
-        {/* Profile Image - Overlapping the header */}
-        <div className="-mt-12 mb-4 flex justify-center sm:justify-start">
-            <div className="p-1.5 bg-white dark:bg-gray-900 rounded-full">
-                 <ProfileImageUploader />
+    // Create a join date string (mocked as user creation time usually not available in basic user object without admin SDK or extra calls)
+    // But we can just use current year or leave it out if not essential. Let's use a nice reliable placeholder or real data if we had it.
+    const joinDate = user?.metadata?.creationTime
+        ? new Date(user.metadata.creationTime).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : "Member";
+
+    return (
+        <div className="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-2xl">
+            {/* Decorative Header */}
+            <div className="h-32 bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 relative">
+                <div className="absolute inset-0 opacity-20 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] animate-pulse"></div>
             </div>
-        </div>
-        
-        <div className="text-center sm:text-left">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-                <div>
-                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
-                    {user?.displayName || "User"}
-                    </h2>
-                    <div className="flex items-center justify-center sm:justify-start gap-2 mt-1 text-gray-500 dark:text-gray-400 text-sm">
-                        <Mail className="h-3.5 w-3.5" />
-                        <span>{user?.email}</span>
+
+            <div className="px-6 pb-8 relative">
+                {/* Profile Image - Overlapping the header */}
+                <div className="-mt-16 mb-6 flex justify-center lg:justify-start">
+                    <div className="p-1.5 bg-white dark:bg-slate-900 rounded-full shadow-xl">
+                        <ProfileImageUploader />
                     </div>
                 </div>
-                
-                <div className="hidden sm:block text-right">
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-indigo-50 dark:bg-indigo-900/30 px-3 py-1 text-xs font-medium text-indigo-700 dark:text-indigo-300">
-                        <CalendarDays className="h-3 w-3" />
-                        Joined {joinDate}
-                    </span>
+
+                <div className="text-center lg:text-left">
+                    <div className="flex flex-col gap-2">
+                        <h2 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">
+                            {user?.displayName || "User Account"}
+                        </h2>
+                        <div className="flex items-center justify-center lg:justify-start gap-2 text-slate-500 dark:text-slate-400 text-sm font-medium">
+                            <Mail className="h-4 w-4 text-primary" />
+                            <span>{user?.email}</span>
+                        </div>
+                        <div className="mt-2 flex justify-center lg:justify-start">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-4 py-1.5 text-[10px] uppercase font-bold tracking-widest text-primary border border-primary/20">
+                                <CalendarDays className="h-3 w-3" />
+                                Joined {joinDate}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 pt-8 border-t border-slate-100 dark:border-slate-800/50">
+                        <div className="grid grid-cols-3 gap-6 text-center">
+                            <div className="space-y-1">
+                                <span className="block text-2xl font-black text-slate-900 dark:text-white">12</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Projects</span>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="block text-2xl font-black text-emerald-500">85%</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Growth</span>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="block text-2xl font-black text-slate-900 dark:text-white">4</span>
+                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Teams</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
-
-            <div className="mt-6 pt-6 border-t border-gray-100 dark:border-gray-800">
-               <div className="grid grid-cols-3 gap-4 text-center divide-x divide-gray-100 dark:divide-gray-800">
-                   <div>
-                       <span className="block text-xl font-bold text-gray-900 dark:text-white">12</span>
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Projects</span>
-                   </div>
-                   <div>
-                       <span className="block text-xl font-bold text-gray-900 dark:text-white">85%</span>
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Success</span>
-                   </div>
-                   <div>
-                       <span className="block text-xl font-bold text-gray-900 dark:text-white">4</span>
-                       <span className="text-xs text-gray-500 uppercase tracking-wide">Teams</span>
-                   </div>
-               </div>
-            </div>
         </div>
-      </div>
-    </div>
-  );
+    );
 }

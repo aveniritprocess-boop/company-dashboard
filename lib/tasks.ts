@@ -7,59 +7,36 @@ import {
   query,
   where,
   orderBy,
-  getDocs,
   serverTimestamp,
-  Timestamp,
-  onSnapshot
+  onSnapshot,
+  Timestamp
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
-export type TaskStatus = "backlog" | "todo" | "in_progress" | "done";
+export type TaskStatus = "pending" | "completed";
 
 export interface Task {
   id: string;
-  title: string;
-  description: string;
+  taskText: string;
+  assignedTo: string; // Employee's Firebase Authentication UID
+  assignedBy: string; // Admin's UID or Name
   status: TaskStatus;
-  priority: "low" | "medium" | "high";
-  dueDate: string;
-  assignedTo: string[]; // Array of User UIDs
-  createdBy: string;
   createdAt: Timestamp;
-  updatedAt: Timestamp;
 }
-
-// Subcollection logic: users/{uid}/tasks is for PERSONAL tasks.
-// But valid "Jira-style" usually means SHARED tasks in a project or team.
-// The prompt says "Sidebar shows only relevant tasks", implying a global or team context 
-// where we filter by assignedTo.
-// However, the previous TaskManager used `users/{uid}/tasks`.
-// To support "Assigned to multiple users" and "Collaborative", we should probably use a top-level `tasks` collection
-// OR `teams/{teamId}/tasks`.
-// Given the complexity of migrating to teams right now without explicit team context in the UI, 
-// let's create a top-level `tasks` collection and filter by `assignedTo` or `createdBy`.
-// This allows true collaboration (assigning others).
 
 const TASKS_COLLECTION = "tasks";
 
 export async function createTask(
-  title: string, 
-  description: string, 
-  createdBy: string, 
-  assignedTo: string[] = [],
-  priority: "low" | "medium" | "high" = "medium",
-  dueDate: string = ""
+  taskText: string,
+  assignedBy: string,
+  assignedTo: string
 ) {
   await addDoc(collection(db, TASKS_COLLECTION), {
-    title,
-    description,
-    status: "backlog",
-    priority,
-    dueDate,
-    assignedTo: assignedTo.length > 0 ? assignedTo : [createdBy], // Default to creator if empty
-    createdBy,
+    taskText,
+    assignedTo,
+    assignedBy,
+    status: "pending",
     createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
   });
 }
 
@@ -67,15 +44,6 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   await updateDoc(taskRef, {
     status,
-    updatedAt: serverTimestamp(),
-  });
-}
-
-export async function assignTask(taskId: string, userIds: string[]) {
-  const taskRef = doc(db, TASKS_COLLECTION, taskId);
-  await updateDoc(taskRef, {
-    assignedTo: userIds,
-    updatedAt: serverTimestamp(),
   });
 }
 
@@ -84,18 +52,38 @@ export async function deleteTask(taskId: string) {
   await deleteDoc(taskRef);
 }
 
-// Function to subscribe to tasks where user is assignee OR creator
+// Function to subscribe to tasks assigned to a specific user
 export function subscribeToUserTasks(userId: string, callback: (tasks: Task[]) => void) {
-  // Firestore OR queries are limited. 
-  // We want: assignedTo array-contains userId OR createdBy == userId.
-  // We might need two queries or one broad query if security rules allow.
-  // For simplicity and "My Tasks" view:
-  // Let's query where `assignedTo` array-contains `userId`.
-  
   const q = query(
     collection(db, TASKS_COLLECTION),
-    where("assignedTo", "array-contains", userId),
-    orderBy("createdAt", "desc")
+    where("assignedTo", "==", userId)
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const tasks = snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data
+      };
+    }) as Task[];
+
+    // Sort client-side to avoid Firestore index requirement
+    tasks.sort((a, b) => {
+      const timeA = a.createdAt?.toMillis?.() || 0;
+      const timeB = b.createdAt?.toMillis?.() || 0;
+      return timeB - timeA;
+    });
+
+    callback(tasks);
+  });
+}
+
+// Function to subscribe to tasks assigned BY a specific admin
+export function subscribeToTasksAssignedBy(adminId: string, callback: (tasks: Task[]) => void) {
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedBy", "==", adminId)
   );
 
   return onSnapshot(q, (snapshot) => {
@@ -103,6 +91,15 @@ export function subscribeToUserTasks(userId: string, callback: (tasks: Task[]) =
       id: doc.id,
       ...doc.data()
     })) as Task[];
+
+    // Sort client-side
+    tasks.sort((a, b) => {
+      const timeA = a.createdAt?.toMillis?.() || 0;
+      const timeB = b.createdAt?.toMillis?.() || 0;
+      return timeB - timeA;
+    });
+
     callback(tasks);
   });
 }
+

@@ -26,7 +26,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
-            
+
             if (firebaseUser) {
                 // Subscribe to user document for live role updates
                 const unsubDoc = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
@@ -43,7 +43,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     console.error("Error fetching user role:", error);
                     setLoading(false);
                 });
-                
+
                 return () => unsubDoc();
             } else {
                 setRole(null);
@@ -60,5 +60,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         </AuthContext.Provider>
     );
 };
+
 
 export const useAuth = () => useContext(AuthContext);

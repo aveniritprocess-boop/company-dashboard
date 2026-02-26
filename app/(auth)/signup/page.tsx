@@ -36,7 +36,7 @@ export default function SignupPage() {
         provider: "email",
         createdAt: new Date().toISOString(),
       });
-      
+
       await sendEmailVerification(user);
 
       router.push("/dashboard");
@@ -59,6 +59,7 @@ export default function SignupPage() {
           email: user.email,
           name: user.displayName || "",
           photoURL: user.photoURL || "",
+          role: "employee",
           provider: provider.providerId,
           createdAt: new Date().toISOString(),
         });
@@ -89,7 +90,7 @@ export default function SignupPage() {
 
       <div className="space-y-6">
         <div>
-           <div className="grid grid-cols-1 gap-3">
+          <div className="grid grid-cols-1 gap-3">
             <button
               onClick={() => handleSocialLogin(googleProvider)}
               className="flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
@@ -97,8 +98,8 @@ export default function SignupPage() {
               Google
             </button>
 
-           </div>
-           <div className="relative mt-6">
+          </div>
+          <div className="relative mt-6">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-gray-300" />
             </div>
