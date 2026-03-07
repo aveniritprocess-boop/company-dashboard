@@ -1,0 +1,134 @@
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\forgot-password\page.tsx
+  23:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx
+   33:28  error    Unexpected any. Specify a different type                                                     @typescript-eslint/no-explicit-any
+   69:28  error    Unexpected any. Specify a different type                                                     @typescript-eslint/no-explicit-any
+   80:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/immutability')
+   84:28  error    Unexpected any. Specify a different type                                                     @typescript-eslint/no-explicit-any
+  109:7   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/immutability')
+  113:28  error    Unexpected any. Specify a different type                                                     @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\api\admin\create-employee\route.ts
+  76:30  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\employees\page.tsx
+  115:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\update-password\page.tsx
+  47:34  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\ProfileImageUploader.tsx
+  96:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\Sidebar.tsx
+   7:3  warning  'CheckSquare' is defined but never used                                                             @typescript-eslint/no-unused-vars
+   8:3  warning  'ListTodo' is defined but never used                                                                @typescript-eslint/no-unused-vars
+  89:7  warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\TaskManager.tsx
+   69:5   warning  Unused eslint-disable directive (no problems were reported from 'react-hooks/set-state-in-effect')
+  120:28  error    Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+  134:28  error    Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+  146:28  error    Unexpected any. Specify a different type                                                            @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\TodoList.tsx
+   76:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+   89:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  100:28  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\TwoFactorAuth.tsx
+   43:30  warning  'response' is defined but never used                                                                                 @typescript-eslint/no-unused-vars
+   71:34  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+   80:17  error    Use "@ts-expect-error" instead of "@ts-ignore", as "@ts-ignore" will do nothing if the following line is error-free  @typescript-eslint/ban-ts-comment
+  100:34  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  121:34  error    Unexpected any. Specify a different type                                                                             @typescript-eslint/no-explicit-any
+  143:88  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`                                                      react/no-unescaped-entities
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\VerifyEmailNotice.tsx
+  22:28  error  Unexpected any. Specify a different type                         @typescript-eslint/no-explicit-any
+  64:14  error  `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\attendance\AttendanceHistory.tsx
+  18:6  warning  React Hook useEffect has a missing dependency: 'loadHistory'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\teams\InviteMemberDialog.tsx
+  32:21  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\teams\TeamList.tsx
+  30:6  warning  React Hook useEffect has a missing dependency: 'fetchTeams'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\teams\TeamMembers.tsx
+   5:10  warning  'Team' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+   6:19  warning  'addMemberToTeam' is defined but never used                                                                   @typescript-eslint/no-unused-vars
+   8:18  warning  'UserPlus' is defined but never used                                                                          @typescript-eslint/no-unused-vars
+  11:11  warning  'user' is assigned a value but never used                                                                     @typescript-eslint/no-unused-vars
+  16:10  warning  'inviteEmail' is assigned a value but never used                                                              @typescript-eslint/no-unused-vars
+  16:23  warning  'setInviteEmail' is assigned a value but never used                                                           @typescript-eslint/no-unused-vars
+  17:10  warning  'isInviteOpen' is assigned a value but never used                                                             @typescript-eslint/no-unused-vars
+  17:24  warning  'setIsInviteOpen' is assigned a value but never used                                                          @typescript-eslint/no-unused-vars
+  34:6   warning  React Hook useEffect has a missing dependency: 'fetchTeam'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  36:9   warning  'handleInvite' is assigned a value but never used                                                             @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\hooks\useAttendanceSession.ts
+  42:6  warning  React Hook useEffect has a missing dependency: 'fetchSession'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\hooks\useOnlineStatus.ts
+  11:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\hooks\useOnlineStatus.ts:11:5
+   9 |     if (typeof window === "undefined") return;
+  10 |
+> 11 |     setIsOnline(navigator.onLine);
+     |     ^^^^^^^^^^^ Avoid calling setState() directly within an effect
+  12 |
+  13 |     const handleOnline = () => setIsOnline(true);
+  14 |     const handleOffline = () => setIsOnline(false);  react-hooks/set-state-in-effect
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\cloudinary.ts
+  4:9  warning  'paramsToSign' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\invitations.ts
+  10:3   warning  'getDoc' is defined but never used    @typescript-eslint/no-unused-vars
+  13:18  warning  'UserRole' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\projects.ts
+  5:3  warning  'updateDoc' is defined but never used  @typescript-eslint/no-unused-vars
+  6:3  warning  'deleteDoc' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\roles.ts
+   9:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  17:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  26:13  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  35:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  48:14  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\sync.ts
+   1:10  warning  'collection' is defined but never used  @typescript-eslint/no-unused-vars
+   1:22  warning  'getDocs' is defined but never used     @typescript-eslint/no-unused-vars
+   1:31  warning  'query' is defined but never used       @typescript-eslint/no-unused-vars
+   1:38  warning  'where' is defined but never used       @typescript-eslint/no-unused-vars
+   1:45  warning  'Timestamp' is defined but never used   @typescript-eslint/no-unused-vars
+   2:10  warning  'db' is defined but never used          @typescript-eslint/no-unused-vars
+  21:45  warning  'userId' is defined but never used      @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\tasks.ts
+  9:3  warning  'orderBy' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\teams.ts
+  6:3  warning  'deleteDoc' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\users.ts
+  17:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  18:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 65 problems (31 errors, 34 warnings)
+  0 errors and 4 warnings potentially fixable with the `--fix` option.
+

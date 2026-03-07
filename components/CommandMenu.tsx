@@ -9,12 +9,9 @@ import {
     Settings,
     Users,
     CheckSquare,
-    LayoutDashboard,
-    X,
-    Command as CommandIcon,
-    Moon,
-    Sun
+    Command as CommandIcon
 } from "lucide-react";
+import { useAuth } from "@/components/AuthProvider";
 
 export function CommandMenu() {
     const [isOpen, setIsOpen] = useState(false);
@@ -43,12 +40,15 @@ export function CommandMenu() {
         setIsOpen(false);
     };
 
+    const { role } = useAuth();
     const actions = [
         { name: "Go to Dashboard", href: "/dashboard", icon: Home, category: "Navigation" },
         { name: "View Your Tasks", href: "/dashboard/your-tasks", icon: CheckSquare, category: "Work" },
         { name: "Daily Diary", href: "/dashboard/daily-diary", icon: Calendar, category: "Work" },
         { name: "Settings", href: "/dashboard/settings", icon: Settings, category: "System" },
-        { name: "Task Given By Sir", href: "/dashboard/task-given-by-sir", icon: Users, category: "Admin" },
+        ...(role === "admin" || role === "ceo" ? [
+            { name: "Task Given By Sir", href: "/dashboard/task-given-by-sir", icon: Users, category: "Admin" }
+        ] : []),
     ];
 
     const filteredActions = actions.filter(action =>
@@ -121,7 +121,7 @@ export function CommandMenu() {
                                     <AlertCircle className="h-8 w-8 text-slate-300 dark:text-slate-600" />
                                 </div>
                             </div>
-                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No results found for "{search}"</p>
+                            <p className="text-sm font-bold text-slate-500 dark:text-slate-400">No results found for &quot;{search}&quot;</p>
                         </div>
                     )}
                 </div>

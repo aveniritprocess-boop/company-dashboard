@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { Sidebar } from "@/components/Sidebar";
 import { NetworkStatus } from "@/components/NetworkStatus";
@@ -14,14 +14,20 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading } = useAuth();
+  const { user, mustChangePassword, loading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (!loading && !user) {
       router.push("/login");
+      return;
     }
-  }, [user, loading, router]);
+
+    if (!loading && mustChangePassword && pathname !== "/dashboard/update-password") {
+      router.push("/dashboard/update-password");
+    }
+  }, [user, loading, mustChangePassword, pathname, router]);
 
   if (loading) {
     return (
@@ -42,7 +48,12 @@ export default function DashboardLayout({
       <Sidebar />
       <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto p-4 sm:p-8 scroll-smooth">
+        <main
+          className={`flex-1 min-h-0 ${pathname === "/dashboard/sheet"
+              ? "overflow-hidden flex flex-col"
+              : "overflow-y-auto p-4 sm:p-8 scroll-smooth"
+            }`}
+        >
           {!user.emailVerified ? <VerifyEmailNotice /> : children}
         </main>
       </div>

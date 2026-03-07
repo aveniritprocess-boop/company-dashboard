@@ -117,7 +117,7 @@ function YourTasksContent() {
 
 export default function YourTasksPage() {
     return (
-        <RoleGuard allowedRoles={["employee", "partner"]} fallbackPath="/dashboard">
+        <RoleGuard allowedRoles={["employee", "manager", "admin", "ceo"]} fallbackPath="/dashboard">
             <YourTasksContent />
         </RoleGuard>
     );

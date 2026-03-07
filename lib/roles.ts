@@ -1,4 +1,4 @@
-export type UserRole = "admin" | "manager" | "employee" | "partner";
+export type UserRole = "ceo" | "admin" | "manager" | "employee";
 
 export interface AppUser {
   uid: string;
@@ -6,7 +6,7 @@ export interface AppUser {
   email: string | null;
   photoURL: string | null;
   role: UserRole;
-  createdAt: any; // Firestore Timestamp
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   teamIds?: string[]; // IDs of teams the user belongs to
 }
 
@@ -14,7 +14,7 @@ export interface Team {
   id?: string;
   name: string;
   createdBy: string;
-  createdAt: any;
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   members: TeamMember[];
   memberUids?: string[]; // Array of UIDs for efficient querying
 }
@@ -23,7 +23,7 @@ export interface TeamMember {
   uid: string;
   role: "admin" | "manager" | "member"; // Role within the team context
   email: string;
-  joinedAt: any;
+  joinedAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export interface Project {
@@ -32,7 +32,7 @@ export interface Project {
   description: string;
   teamId: string;
   createdBy: string;
-  createdAt: any;
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   status: "active" | "archived" | "completed";
 }
 
@@ -45,32 +45,46 @@ export interface Invite {
   teamRole?: "admin" | "manager" | "member"; // If invited to a team
   invitedBy: string;
   status: "pending" | "accepted";
-  createdAt: any;
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export const PERMISSIONS = {
+  ceo: {
+    canViewAllTasks: true,
+    canEditSirTasks: true,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
+    canViewAllEmployees: true,
+    canBeDeleted: false,
+  },
   admin: {
     canManageUsers: true,
     canManageTeams: true,
     canManageProjects: true,
     canViewAllTasks: true,
+    canEditSirTasks: true,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
+    canViewAllEmployees: true,
+    canDeleteTasks: true,
+    canManageRoles: true,
   },
   manager: {
     canManageUsers: false,
     canManageTeams: true, // Only their own teams
     canManageProjects: true, // Only their own projects
     canViewAllTasks: false, // Only team tasks
+    canEditSirTasks: false,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
+    canDeleteTasks: false,
+    canAccessAdminSettings: false,
   },
   employee: {
     canManageUsers: false,
     canManageTeams: false,
     canManageProjects: false,
     canViewAllTasks: false,
-  },
-  partner: {
-    canManageUsers: false,
-    canManageTeams: false,
-    canManageProjects: false,
-    canViewAllTasks: false,
+    canViewOwnTasksOnly: true,
   },
 };

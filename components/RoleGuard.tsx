@@ -1,28 +1,65 @@
 "use client";
 
-import { useAuth } from "@/components/AuthProvider";
-import { UserRole } from "@/lib/roles";
+import { useAuth } from "./AuthProvider";
+import { UserRole, PERMISSIONS } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 interface RoleGuardProps {
   children: React.ReactNode;
-  allowedRoles: UserRole[];
+  allowedRoles?: UserRole[];
+  permission?: keyof typeof PERMISSIONS.admin; // Use admin as template for keys
+  fallback?: React.ReactNode;
   fallbackPath?: string;
 }
 
-export function RoleGuard({ children, allowedRoles, fallbackPath = "/dashboard" }: RoleGuardProps) {
+export function RoleGuard({
+  children,
+  allowedRoles,
+  permission,
+  fallback = null,
+  fallbackPath
+}: RoleGuardProps) {
   const { role, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!loading && role && !allowedRoles.includes(role)) {
-      router.push(fallbackPath);
-    }
-  }, [role, loading, allowedRoles, fallbackPath, router]);
+    if (!loading && fallbackPath) {
+      let allowed = true;
+      if (!role) {
+        allowed = false;
+      } else if (allowedRoles && !allowedRoles.includes(role)) {
+        allowed = false;
+      } else if (permission) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rolePermissions = PERMISSIONS[role] as any;
+        if (!rolePermissions || !rolePermissions[permission]) {
+          allowed = false;
+        }
+      }
 
-  if (loading) return <div className="p-10 text-center opacity-50">Checking permissions...</div>;
-  if (!role || !allowedRoles.includes(role)) return null;
+      if (!allowed) {
+        router.push(fallbackPath);
+      }
+    }
+  }, [role, loading, allowedRoles, permission, fallbackPath, router]);
+
+  if (loading) return null;
+  if (!role) return fallback;
+
+  // Check if role is in allowed roles
+  if (allowedRoles && !allowedRoles.includes(role)) {
+    return fallback;
+  }
+
+  // Check specific permission if provided
+  if (permission) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rolePermissions = PERMISSIONS[role] as any;
+    if (!rolePermissions || !rolePermissions[permission]) {
+      return fallback;
+    }
+  }
 
   return <>{children}</>;
 }

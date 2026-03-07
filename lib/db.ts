@@ -20,4 +20,21 @@ export async function getCachedTasks(userId: string) {
   return getCachedData(q);
 }
 
+export async function getAllCachedTasks() {
+  const q = query(
+    collection(db, "tasks"),
+    orderBy("createdAt", "desc")
+  );
+  return getCachedData(q);
+}
+
+export async function getTeamCachedTasks(managerUid: string) {
+  const q = query(
+    collection(db, "tasks"),
+    where("assignedBy", "==", managerUid),
+    orderBy("createdAt", "desc")
+  );
+  return getCachedData(q);
+}
+
 

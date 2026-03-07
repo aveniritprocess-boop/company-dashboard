@@ -1,11 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  CheckSquare,
-  ListTodo,
   BarChart,
   Settings,
   Users,
@@ -14,16 +12,13 @@ import {
   ClipboardList,
   ListChecks,
   UserCheck,
+  MapPin,
+  TableProperties,
 } from "lucide-react";
 import { SidebarUser } from "./SidebarUser";
 import { useAuth } from "./AuthProvider";
 
-const baseNavigation = [
-  { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Todos", href: "/dashboard/todos", icon: CheckSquare },
-  { name: "Tasks", href: "/dashboard/tasks", icon: ListTodo },
-  { name: "Progress", href: "/dashboard/progress", icon: BarChart },
-];
+
 
 
 
@@ -60,15 +55,22 @@ export function Sidebar() {
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Daily Diary", href: "/dashboard/daily-diary", icon: ClipboardList },
     { name: "Your Tasks", href: "/dashboard/your-tasks", icon: ListChecks },
-    ...(role === "admin"
+    { name: "Shared Sheet", href: "/dashboard/sheet", icon: TableProperties },
+    ...(role === "admin" || role === "ceo"
       ? [{ name: "Task Given By Sir", href: "/dashboard/task-given-by-sir", icon: UserCheck }]
       : []),
+    ...(role === "admin" || role === "ceo"
+      ? [{ name: "Employees", href: "/dashboard/employees", icon: Users }]
+      : []),
     { name: "Attendance", href: "/dashboard/attendance", icon: CalendarClock },
-    ...(role === "admin" || role === "manager"
+    ...(role === "admin" || role === "manager" || role === "ceo"
       ? [
         { name: "Teams", href: "/dashboard/teams", icon: Users },
         { name: "Projects", href: "/dashboard/projects", icon: FolderGit2 }
       ]
+      : []),
+    ...(role === "admin" || role === "ceo"
+      ? [{ name: "Locations", href: "/dashboard/locations", icon: MapPin }]
       : []),
     { name: "Progress", href: "/dashboard/progress", icon: BarChart },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
@@ -80,6 +82,7 @@ export function Sidebar() {
     const savedWidth = localStorage.getItem("sidebarWidth");
 
     if (savedState) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsCollapsed(savedState === "true");
     }
     if (savedWidth) {
@@ -163,12 +166,12 @@ export function Sidebar() {
         {[
           {
             label: "Main Menu",
-            items: navigation.filter(i => ["Dashboard", "Daily Diary", "Your Tasks", "Attendance", "Progress"].includes(i.name))
+            items: navigation.filter(i => ["Dashboard", "Daily Diary", "Your Tasks", "Shared Sheet", "Attendance", "Progress"].includes(i.name))
           },
-          ...(role === "admin" || role === "manager" ? [
+          ...(role === "admin" || role === "manager" || role === "ceo" ? [
             {
               label: "Management",
-              items: navigation.filter(i => ["Task Given By Sir", "Teams", "Projects"].includes(i.name))
+              items: navigation.filter(i => ["Task Given By Sir", "Employees", "Teams", "Projects", "Locations"].includes(i.name))
             }
           ] : []),
           {

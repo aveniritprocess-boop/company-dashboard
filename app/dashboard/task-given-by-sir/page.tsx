@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { RoleGuard } from "@/components/RoleGuard";
-import { createTask, subscribeToTasksAssignedBy, Task } from "@/lib/tasks";
+import { createTask, subscribeToTasksAssignedBy, subscribeToAllTasks, Task } from "@/lib/tasks";
 import { getAllUsers, AppUserSummary } from "@/lib/users";
 import {
     UserCheck,
@@ -27,7 +27,7 @@ const emptyForm = (): AssignForm => ({
 });
 
 function TaskGivenContent() {
-    const { user } = useAuth();
+    const { user, role } = useAuth();
     const [employees, setEmployees] = useState<AppUserSummary[]>([]);
     const [assignedTasks, setAssignedTasks] = useState<Task[]>([]);
     const [loadingUsers, setLoadingUsers] = useState(true);
@@ -59,13 +59,22 @@ function TaskGivenContent() {
     }, [fetchUsers]);
 
     useEffect(() => {
-        if (!user) return;
-        const unsub = subscribeToTasksAssignedBy(user.uid, (tasks) => {
-            setAssignedTasks(tasks);
-            setLoadingTasks(false);
-        });
+        if (!user || !role) return;
+
+        let unsub;
+        if (role === "admin" || role === "ceo") {
+            unsub = subscribeToAllTasks((tasks) => {
+                setAssignedTasks(tasks);
+                setLoadingTasks(false);
+            });
+        } else {
+            unsub = subscribeToTasksAssignedBy(user.uid, (tasks) => {
+                setAssignedTasks(tasks);
+                setLoadingTasks(false);
+            });
+        }
         return () => unsub();
-    }, [user]);
+    }, [user, role]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -77,6 +86,7 @@ function TaskGivenContent() {
         try {
             await createTask(
                 form.taskText,
+                "", // No detailed description field in this basic form yet
                 user.uid,
                 form.assignedTo
             );
@@ -267,7 +277,7 @@ function TaskGivenContent() {
 
 export default function TaskGivenBySirPage() {
     return (
-        <RoleGuard allowedRoles={["admin", "manager"]} fallbackPath="/dashboard">
+        <RoleGuard allowedRoles={["admin", "manager", "ceo"]} fallbackPath="/dashboard">
             <TaskGivenContent />
         </RoleGuard>
     );

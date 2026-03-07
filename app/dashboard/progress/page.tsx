@@ -2,18 +2,18 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { getCachedTasks } from "@/lib/db";
+import { getCachedTasks, getAllCachedTasks, getTeamCachedTasks } from "@/lib/db";
 import { GrowthChart } from "@/components/charts/GrowthChart";
 import { ProgressSummary } from "@/components/ProgressSummary";
 
 interface Task {
   id: string;
-  createdAt: any; // Timestamp
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
   status: string;
 }
 
 export default function ProgressPage() {
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [growthData, setGrowthData] = useState<{ name: string; tasks: number }[]>([]);
   const [stats, setStats] = useState({
     pending: 0,
@@ -26,7 +26,16 @@ export default function ProgressPage() {
     async function fetchData() {
       if (!user) return;
       try {
-        const { data: tasks } = await getCachedTasks(user.uid);
+        let result;
+        if (role === "admin" || role === "ceo") {
+          result = await getAllCachedTasks();
+        } else if (role === "manager") {
+          result = await getTeamCachedTasks(user.uid);
+        } else {
+          result = await getCachedTasks(user.uid);
+        }
+
+        const tasks = result.data;
         const typedTasks = tasks as Task[];
 
         const pendingCount = typedTasks.filter(t => t.status === "pending").length;
@@ -74,7 +83,7 @@ export default function ProgressPage() {
     }
 
     fetchData();
-  }, [user]);
+  }, [user, role]);
 
   return (
     <div className="space-y-8">

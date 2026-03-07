@@ -15,8 +15,8 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
 
   const startCamera = async () => {
     try {
-      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
-        video: { facingMode: "user" } 
+      const mediaStream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" }
       });
       setStream(mediaStream);
       if (videoRef.current) {
@@ -37,6 +37,7 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
         stream.getTracks().forEach(track => track.stop());
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const capturePhoto = useCallback(() => {
@@ -70,7 +71,7 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
       {error ? (
         <div className="flex flex-col items-center text-center p-8 space-y-4">
           <p className="text-red-500">{error}</p>
-          <button 
+          <button
             onClick={handleRetry}
             className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700"
           >
@@ -80,24 +81,24 @@ export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
       ) : (
         <>
           <div className="relative overflow-hidden rounded-lg bg-black aspect-video w-full max-w-sm">
-            <video 
-              ref={videoRef} 
-              autoPlay 
-              playsInline 
-              muted 
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
               className="w-full h-full object-cover"
             />
           </div>
           <div className="flex gap-4">
             {onCancel && (
-              <button 
+              <button
                 onClick={onCancel}
                 className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700 dark:hover:bg-gray-700"
               >
                 Cancel
               </button>
             )}
-            <button 
+            <button
               onClick={capturePhoto}
               className="flex items-center gap-2 px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 shadow-sm"
             >

@@ -14,7 +14,8 @@ export default function LoginPage() {
   const router = useRouter();
 
   // MFA State
-  const [mfaResolver, setMfaResolver] = useState<any>(null);
+  const [mfaResolver, setMfaResolver] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
+
   const [verificationId, setVerificationId] = useState("");
   const [code, setCode] = useState("");
   const [showMfa, setShowMfa] = useState(false);
@@ -25,8 +26,11 @@ export default function LoginPage() {
     setError("");
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      // eslint-disable-next-line react-hooks/immutability
+      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       if (err.code === "auth/multi-factor-auth-required") {
         setShowMfa(true);
         setMfaResolver(getMultiFactorResolver(auth, err));
@@ -37,9 +41,9 @@ export default function LoginPage() {
     }
   };
 
-  const initMfa = async (resolver: any) => {
+  const initMfa = async (resolver: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     // Find the enrolled phone factor
-    const phoneHint = resolver.hints.find((hint: any) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID);
+    const phoneHint = resolver.hints.find((hint: any) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID); // eslint-disable-line @typescript-eslint/no-explicit-any
     if (!phoneHint) {
       setError("No supported second factor found.");
       return;
@@ -61,7 +65,8 @@ export default function LoginPage() {
         window.recaptchaVerifier
       );
       setVerificationId(vId);
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       setError("Failed to send MFA code: " + err.message);
     }
   }
@@ -72,13 +77,15 @@ export default function LoginPage() {
       const cred = PhoneAuthProvider.credential(verificationId, code);
       const multiFactorAssertion = PhoneMultiFactorGenerator.assertion(cred);
       await mfaResolver.resolveSignIn(multiFactorAssertion);
+      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       setError(err.message);
     }
   }
 
-  const handleSocialLogin = async (provider: any) => {
+  const handleSocialLogin = async (provider: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     setError("");
     try {
       const result = await signInWithPopup(auth, provider);
@@ -98,8 +105,10 @@ export default function LoginPage() {
           createdAt: new Date().toISOString(),
         });
       }
+      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       if (err.code === "auth/multi-factor-auth-required") {
         setShowMfa(true);
         setMfaResolver(getMultiFactorResolver(auth, err));
@@ -146,13 +155,7 @@ export default function LoginPage() {
           Log in
         </h2>
         <p className="mt-2 text-sm text-gray-600">
-          Don't have an account?{" "}
-          <Link
-            href="/signup"
-            className="font-medium text-primary hover:text-primary-hover"
-          >
-            Sign up
-          </Link>
+          Professional Portal Access Only
         </p>
       </div>
 

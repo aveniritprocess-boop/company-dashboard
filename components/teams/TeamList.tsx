@@ -27,6 +27,7 @@ export function TeamList() {
 
   useEffect(() => {
     fetchTeams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   if (loading) {
@@ -37,7 +38,7 @@ export function TeamList() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
-            My Teams
+          My Teams
         </h2>
         <CreateTeamDialog onTeamCreated={fetchTeams} />
       </div>
@@ -57,26 +58,26 @@ export function TeamList() {
               className="group relative flex flex-col justify-between overflow-hidden rounded-lg border border-gray-200 bg-white p-6 shadow-sm transition-all hover:shadow-md hover:border-indigo-500/50 dark:border-gray-700 dark:bg-gray-800 dark:hover:border-indigo-400/50"
             >
               <div className="mb-4">
-                  <div className="flex items-center gap-2 mb-2">
-                       <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
-                           <Users className="h-5 w-5" />
-                       </div>
-                       <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                         {team.name}
-                       </h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400">
+                    <Users className="h-5 w-5" />
                   </div>
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    {team.name}
+                  </h3>
+                </div>
                 <p className="text-sm text-gray-500 dark:text-gray-400">
                   {team.members.length} member{team.members.length !== 1 ? "s" : ""}
                 </p>
               </div>
-              
-               <div className="flex -space-x-2 overflow-hidden py-2">
-                   {team.members.slice(0, 5).map((member, i) => (
-                       <div key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-gray-800 bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
-                           {member.email[0].toUpperCase()}
-                       </div>
-                   ))}
-               </div>
+
+              <div className="flex -space-x-2 overflow-hidden py-2">
+                {team.members.slice(0, 5).map((member, i) => (
+                  <div key={i} className="inline-block h-8 w-8 rounded-full ring-2 ring-white dark:ring-gray-800 bg-gray-200 flex items-center justify-center text-xs font-medium text-gray-600">
+                    {member.email[0].toUpperCase()}
+                  </div>
+                ))}
+              </div>
             </Link>
           ))}
         </div>

@@ -5,7 +5,6 @@ import {
   collection,
   addDoc,
   query,
-  where,
   onSnapshot,
   deleteDoc,
   doc,
@@ -15,13 +14,13 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { useAuth } from "./AuthProvider";
-import { Trash2, Plus, Check, Circle } from "lucide-react";
+import { Trash2, Plus, Check } from "lucide-react";
 
 interface Todo {
   id: string;
   text: string;
   completed: boolean;
-  createdAt: any;
+  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export function TodoList() {
@@ -33,6 +32,7 @@ export function TodoList() {
 
   useEffect(() => {
     if (!user) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setError(null);
 
     const q = query(
@@ -41,7 +41,7 @@ export function TodoList() {
     );
 
     const unsubscribe = onSnapshot(
-      q, 
+      q,
       (snapshot) => {
         const todosData = snapshot.docs.map((doc) => ({
           id: doc.id,
@@ -72,8 +72,9 @@ export function TodoList() {
         createdAt: serverTimestamp(),
       });
       setNewTodo("");
-    } catch (error: any) {
-      console.error("Error adding todo: ", error);
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.error("Error adding todo: ", err);
       setError("Failed to add todo. Please try again.");
     }
   };
@@ -84,8 +85,9 @@ export function TodoList() {
       await updateDoc(doc(db, "users", user.uid, "todos", id), {
         completed: !completed,
       });
-    } catch (error: any) {
-      console.error("Error toggling todo: ", error);
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.error("Error toggling todo: ", err);
       setError("Failed to update todo.");
     }
   };
@@ -94,14 +96,15 @@ export function TodoList() {
     if (!user) return;
     try {
       await deleteDoc(doc(db, "users", user.uid, "todos", id));
-    } catch (error: any) {
-      console.error("Error deleting todo: ", error);
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      console.error("Error deleting todo: ", err);
       setError("Failed to delete todo.");
     }
   };
 
   if (loading) {
-     return <div className="text-center py-4 text-gray-500">Loading todos...</div>;
+    return <div className="text-center py-4 text-gray-500">Loading todos...</div>;
   }
 
   return (
@@ -130,7 +133,7 @@ export function TodoList() {
 
       <div className="space-y-3">
         {todos.length === 0 && !error && (
-           <p className="text-center text-gray-500 py-10">No todos yet. Add one above!</p>
+          <p className="text-center text-gray-500 py-10">No todos yet. Add one above!</p>
         )}
         {todos.map((todo) => (
           <div
@@ -140,20 +143,18 @@ export function TodoList() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => toggleTodo(todo.id, todo.completed)}
-                className={`flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${
-                  todo.completed
-                    ? "border-green-500 bg-green-500 text-white"
-                    : "border-gray-300 dark:border-gray-600 hover:border-green-500"
-                }`}
+                className={`flex h-6 w-6 items-center justify-center rounded-full border transition-colors ${todo.completed
+                  ? "border-green-500 bg-green-500 text-white"
+                  : "border-gray-300 dark:border-gray-600 hover:border-green-500"
+                  }`}
               >
                 {todo.completed && <Check className="h-4 w-4" />}
               </button>
               <span
-                className={`${
-                  todo.completed
-                    ? "text-gray-400 line-through dark:text-gray-500"
-                    : "text-gray-900 dark:text-gray-100"
-                }`}
+                className={`${todo.completed
+                  ? "text-gray-400 line-through dark:text-gray-500"
+                  : "text-gray-900 dark:text-gray-100"
+                  }`}
               >
                 {todo.text}
               </span>

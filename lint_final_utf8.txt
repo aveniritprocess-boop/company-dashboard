@@ -1,0 +1,24 @@
+﻿
+> personal-dashboard-temp@0.1.0 lint
+> eslint
+
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx
+  29:7  error  Error: This value cannot be modified
+
+Modifying a variable defined outside a component or hook is not allowed. Consider using an effect.
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx:29:7
+  27 |     try {
+  28 |       await signInWithEmailAndPassword(auth, email, password);
+> 29 |       document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
+     |       ^^^^^^^^ value cannot be modified
+  30 |       router.push("/dashboard");
+  31 |     } catch (error: unknown) {
+  32 |       const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any  react-hooks/immutability
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\teams\TeamMembers.tsx
+  11:11  warning  'user' is assigned a value but never used  @typescript-eslint/no-unused-vars
+
+✖ 2 problems (1 error, 1 warning)
+

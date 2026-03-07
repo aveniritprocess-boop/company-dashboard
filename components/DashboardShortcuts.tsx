@@ -4,7 +4,6 @@ import { useAuth } from "@/components/AuthProvider";
 import {
   ClipboardList,
   ListChecks,
-  Users,
   BarChart3,
   Settings,
   Zap,
@@ -30,7 +29,7 @@ export function DashboardShortcuts() {
       theme: "green" as const,
       description: "Tasks assigned to you",
     },
-    ...(role === "admin"
+    ...(role === "admin" || role === "ceo" || role === "manager"
       ? [{
         name: "Task Given By Sir",
         href: "/dashboard/task-given-by-sir",

@@ -1,22 +1,21 @@
-import { 
-  collection, 
-  doc, 
-  addDoc,
-  updateDoc, 
-  serverTimestamp, 
-  query, 
-  where, 
-  getDocs,
-  getDoc
+import {
+    collection,
+    doc,
+    addDoc,
+    updateDoc,
+    serverTimestamp,
+    query,
+    where,
+    getDocs
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { Invite, UserRole } from "@/lib/roles";
+import { Invite } from "@/lib/roles";
 
 export async function createInvite(invitation: Omit<Invite, "id" | "createdAt" | "status">) {
     // Check if invite already exists for this email and team
     const q = query(
-        collection(db, "invites"), 
-        where("email", "==", invitation.email), 
+        collection(db, "invites"),
+        where("email", "==", invitation.email),
         where("teamId", "==", invitation.teamId),
         where("status", "==", "pending")
     );

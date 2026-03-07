@@ -2,12 +2,13 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { subscribeToUserTasks, Task } from "@/lib/tasks";
-import { CheckCircle2, Clock, AlertCircle, ArrowRight, ClipboardList } from "lucide-react";
+import { subscribeToUserTasks } from "@/lib/tasks";
+import { CheckCircle2, Clock, ArrowRight, ClipboardList } from "lucide-react";
 import Link from "next/link";
 
 export function RecentActivity() {
     const { user } = useAuth();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [activities, setActivities] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 

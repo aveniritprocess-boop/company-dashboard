@@ -4,8 +4,7 @@ import { LogOut, User as UserIcon } from "lucide-react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
-import { auth, db } from "@/lib/firebase";
-import { clearIndexedDbPersistence } from "firebase/firestore";
+import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthProvider";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -20,6 +19,7 @@ export function SidebarUser({ isCollapsed }: SidebarUserProps) {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
+      document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
       router.push("/login");
     } catch (error) {
       console.error("Error signing out", error);
@@ -56,12 +56,12 @@ export function SidebarUser({ isCollapsed }: SidebarUserProps) {
               {user.email}
             </p>
             <span className="inline-flex items-center mt-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400 capitalize border border-gray-200 dark:border-gray-700">
-                {role || "guest"}
+              {role || "guest"}
             </span>
           </div>
         )}
       </div>
-      
+
       <div className={`flex items-center ${isCollapsed ? 'flex-col gap-3 justify-center' : 'justify-between px-1'}`}>
         <ThemeToggle />
         <button

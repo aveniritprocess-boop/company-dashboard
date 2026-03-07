@@ -1,8 +1,69 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function hasRole(role) {
+      return isSignedIn() && getUserData().role == role;
+    }
+    
+    function isCEO() {
+      return hasRole('ceo');
+    }
+    
+    function isAdmin() {
+      return hasRole('admin');
+    }
+    
+    function isManager() {
+      return hasRole('manager');
+    }
+
+    // Users collection
+    match /users/{userId} {
+      // Any signed-in user can read their own doc.
+      // Admins, CEOs, and Managers can read all user docs.
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        isCEO() || isAdmin() || isManager()
+      );
+      // Any signed-in user can CREATE their own document (needed for first Google login).
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      // Users can update their own doc; Admins can update anyone's doc.
+      allow update: if isSignedIn() && (isAdmin() || isCEO() || request.auth.uid == userId);
+      // Prevent deletion of CEO
+      allow delete: if isAdmin() && resource.data.role != 'ceo';
+    }
+
+    // Tasks collection
+    match /tasks/{taskId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || 
+        (isManager() && (request.auth.uid == resource.data.assignedBy || request.auth.uid in resource.data.assignedTo)) ||
+        (request.auth.uid == resource.data.assignedTo || (resource.data.assignedTo is list && request.auth.uid in resource.data.assignedTo))
+      );
+      
+      allow create: if isCEO() || isAdmin() || isManager();
+      
+      allow update: if isSignedIn() && (
+        isCEO() || isAdmin() ||
+        (isManager() && resource.data.assignedBy == request.auth.uid) ||
+        (request.auth.uid in resource.data.assignedTo && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at']))
+      );
+      
+      allow delete: if isAdmin() || (isCEO() && resource.data.assignedBy == request.auth.uid);
+    }
+    
+    // Default deny
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
   }
 }

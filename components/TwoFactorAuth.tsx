@@ -5,8 +5,7 @@ import {
     multiFactor,
     PhoneAuthProvider,
     PhoneMultiFactorGenerator,
-    RecaptchaVerifier,
-    User
+    RecaptchaVerifier
 } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthProvider";
@@ -40,7 +39,7 @@ export function TwoFactorAuth() {
         if (!window.recaptchaVerifier && recaptchaContainerRef.current) {
             window.recaptchaVerifier = new RecaptchaVerifier(auth, recaptchaContainerRef.current, {
                 'size': 'normal',
-                'callback': (response: any) => {
+                'callback': () => {
                     // reCAPTCHA solved
                 }
             });
@@ -67,7 +66,8 @@ export function TwoFactorAuth() {
             const vId = await phoneAuthProvider.verifyPhoneNumber(phoneOptions, appVerifier);
             setVerificationId(vId);
             setStep("verify");
-        } catch (err: any) {
+        } catch (error: unknown) {
+            const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             console.error(err);
             if (err.code === "auth/operation-not-allowed") {
                 setError("SMS-based Multi-Factor Authentication is not enabled in your Firebase console. Please go to Authentication > Sign-in method and enable Phone as an MFA factor.");
@@ -76,7 +76,7 @@ export function TwoFactorAuth() {
             }
             if (window.recaptchaVerifier) {
                 window.recaptchaVerifier.clear();
-                // @ts-ignore
+                // @ts-expect-error window.recaptchaVerifier can be null
                 window.recaptchaVerifier = null;
             }
         } finally {
@@ -95,7 +95,8 @@ export function TwoFactorAuth() {
 
             await multiFactor(user).enroll(multiFactorAssertion, "Phone Number");
             setStep("enrolled");
-        } catch (err: any) {
+        } catch (error: unknown) {
+            const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             console.error(err);
             setError(err.message || "Failed to verify code");
         } finally {
@@ -115,7 +116,8 @@ export function TwoFactorAuth() {
                 setPhone("");
                 setCode("");
             }
-        } catch (err: any) {
+        } catch (error: unknown) {
+            const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             setError(err.message);
         } finally {
             setLoading(false);
@@ -137,7 +139,7 @@ export function TwoFactorAuth() {
                     </div>
                 </div>
                 <p className="text-slate-500 dark:text-slate-400 mb-8 text-sm leading-relaxed max-w-sm">
-                    Your account is currently protected with SMS-based verification. We'll ask for a code whenever you log in from a new device.
+                    Your account is currently protected with SMS-based verification. We&apos;ll ask for a code whenever you log in from a new device.
                 </p>
                 <button
                     onClick={handleRevoke}

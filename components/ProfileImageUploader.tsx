@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Camera, Loader2, X } from "lucide-react";
+import { Camera, Loader2 } from "lucide-react";
 import Image from "next/image";
 import { doc, setDoc } from "firebase/firestore";
 import { updateProfile } from "firebase/auth";
-import { db, auth } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 import { useAuth } from "./AuthProvider";
 
 export function ProfileImageUploader() {
@@ -21,17 +21,17 @@ export function ProfileImageUploader() {
 
     // Validate file type and size (max 5MB)
     if (!file.type.startsWith("image/")) {
-        setError("Please upload an image file.");
-        return;
+      setError("Please upload an image file.");
+      return;
     }
     if (file.size > 5 * 1024 * 1024) {
-        setError("Image size must be less than 5MB.");
-        return;
+      setError("Image size must be less than 5MB.");
+      return;
     }
 
     try {
       setUploading(true);
-      
+
       // 1. Get Signature from our API
       const timestamp = Math.round(new Date().getTime() / 1000);
       const paramsToSign = {
@@ -60,11 +60,11 @@ export function ProfileImageUploader() {
       // I will assume NEXT_PUBLIC_CLOUDINARY_API_KEY is available or I need to pass it from server? 
       // Better: The signature response could return the apiKey if needed, OR I can just assume the user put it in NEXT_PUBLIC.
       // Let's use the one from env if available.
-      
+
       formData.append("timestamp", timestamp.toString());
       formData.append("signature", signature);
       formData.append("folder", "user_profiles");
-      
+
       // We need the cloud name for the URL
       const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME;
       if (!cloudName) throw new Error("Cloudinary Cloud Name is missing");
@@ -92,7 +92,8 @@ export function ProfileImageUploader() {
       }, { merge: true });
 
       setPreview(imageUrl);
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
       console.error("Upload failed", err);
       setError("Failed to upload image. Please try again.");
     } finally {

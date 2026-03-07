@@ -1,13 +1,6 @@
 export async function uploadImage(file: File): Promise<string> {
   // 1. Get signature
   const timestamp = Math.round((new Date()).getTime() / 1000);
-  const paramsToSign = {
-    timestamp: timestamp,
-    upload_preset: "ml_default", // You might need to change this if you don't have an unsigned preset, but for signed upload we usually don't need preset if we sign everything. 
-    // Wait, the existing sign-cloudinary route signs the params we send it.
-    // If we are doing SIGNED upload, we don't necessarily need a preset if we provide the sign.
-    // However, usually we sign a specific set of params.
-  };
 
   // Actually, standard signed upload flow:
   // 1. Prepare params (timestamp, etc)

@@ -1,5 +1,4 @@
-import { collection, getDocs, query, where, Timestamp } from "firebase/firestore";
-import { db } from "./firebase";
+// sync.ts
 
 // This file handles logic for smart synchronization
 // Since we are using Firestore's persistence, 'sync' happens automatically.
@@ -19,10 +18,10 @@ export function updateLastSyncTime(userId: string) {
 }
 
 export async function checkForRemoteUpdates(userId: string) {
-   // This function could query for documents changed AFTER the last sync time
-   // This is an optimization to fetch ONLY deltas rather than everything,
-   // though Firestore SDK usually handles this well.
-   
-   // This is a placeholder for where robust sync logic would live if we weren't using the SDK.
-   console.log("Checking for remote updates...");
+    // This function could query for documents changed AFTER the last sync time
+    // This is an optimization to fetch ONLY deltas rather than everything,
+    // though Firestore SDK usually handles this well.
+
+    // This is a placeholder for where robust sync logic would live if we weren't using the SDK.
+    console.log(`Checking for remote updates for user ${userId}...`);
 }

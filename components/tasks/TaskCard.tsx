@@ -1,7 +1,6 @@
 "use client";
 
 import { Task, TaskStatus, updateTaskStatus, deleteTask } from "@/lib/tasks";
-import { format } from "date-fns";
 import { MoreHorizontal, Trash2, ArrowRight, ArrowLeft, Clock } from "lucide-react";
 import { useState } from "react";
 
@@ -26,7 +25,7 @@ export function TaskCard({ task, currentUserId }: TaskCardProps) {
     setLoading(true);
     const currentIndex = statusOrder.indexOf(task.status);
     const newIndex = direction === "next" ? currentIndex + 1 : currentIndex - 1;
-    
+
     if (newIndex >= 0 && newIndex < statusOrder.length) {
       await updateTaskStatus(task.id, statusOrder[newIndex]);
     }
@@ -39,7 +38,8 @@ export function TaskCard({ task, currentUserId }: TaskCardProps) {
     }
   };
 
-  const canEdit = task.assignedTo.includes(currentUserId) || task.createdBy === currentUserId;
+  const assignedToArray = Array.isArray(task.assignedTo) ? task.assignedTo : [task.assignedTo];
+  const canEdit = assignedToArray.includes(currentUserId) || task.createdBy === currentUserId;
 
   return (
     <div className={`
@@ -52,80 +52,80 @@ export function TaskCard({ task, currentUserId }: TaskCardProps) {
           {task.priority}
         </span>
         <div className="relative">
-             {canEdit && (
-                <button 
-                    onClick={() => setIsMenuOpen(!isMenuOpen)}
-                    className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                >
-                    <MoreHorizontal className="h-4 w-4" />
-                </button>
-             )}
-             {isMenuOpen && (
-                 <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
-                    <button 
-                        onClick={handleDelete}
-                        className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
-                    >
-                        <Trash2 className="h-3 w-3" /> Delete
-                    </button>
-                 </div>
-             )}
+          {canEdit && (
+            <button
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+          )}
+          {isMenuOpen && (
+            <div className="absolute right-0 mt-1 w-32 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-10">
+              <button
+                onClick={handleDelete}
+                className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+              >
+                <Trash2 className="h-3 w-3" /> Delete
+              </button>
+            </div>
+          )}
         </div>
       </div>
-      
+
       <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-1 line-clamp-2">
-        {task.title}
+        {task.taskText || task.title}
       </h4>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 line-clamp-3">
         {task.description}
       </p>
-      
+
       <div className="flex items-center justify-between text-xs text-gray-400 pt-2 border-t border-gray-100 dark:border-gray-700/50">
         <div className="flex items-center gap-1">
-             {task.dueDate ? (
-                 <>
-                    <Clock className="h-3 w-3" />
-                    <span>{new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
-                 </>
-             ) : (
-                <span>No due date</span>
-             )}
+          {task.dueDate ? (
+            <>
+              <Clock className="h-3 w-3" />
+              <span>{new Date(task.dueDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>
+            </>
+          ) : (
+            <span>No due date</span>
+          )}
         </div>
-        
+
         {/* Simple Move Controls for Kanban */}
         {canEdit && (
-            <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                {task.status !== 'backlog' && (
-                    <button 
-                        onClick={() => handleMove("prev")}
-                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"
-                        title="Move back"
-                    >
-                        <ArrowLeft className="h-3 w-3" />
-                    </button>
-                )}
-                {task.status !== 'done' && (
-                    <button 
-                        onClick={() => handleMove("next")}
-                        className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"
-                        title="Move forward"
-                    >
-                        <ArrowRight className="h-3 w-3" />
-                    </button>
-                )}
-            </div>
+          <div className="flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+            {task.status !== 'backlog' && (
+              <button
+                onClick={() => handleMove("prev")}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"
+                title="Move back"
+              >
+                <ArrowLeft className="h-3 w-3" />
+              </button>
+            )}
+            {task.status !== 'done' && (
+              <button
+                onClick={() => handleMove("next")}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded text-gray-500"
+                title="Move forward"
+              >
+                <ArrowRight className="h-3 w-3" />
+              </button>
+            )}
+          </div>
         )}
       </div>
-      
-      {/* Assignee Avatars (Mock for now, using initials) */}
-      {task.assignedTo.length > 0 && (
-         <div className="flex -space-x-2 mt-3 overflow-hidden">
-             {task.assignedTo.map(uid => (
-                 <div key={uid} className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-gray-800 flex items-center justify-center text-[10px] text-indigo-700 dark:text-indigo-300 font-bold" title={uid}>
-                    {uid.substring(0, 2).toUpperCase()}
-                 </div>
-             ))}
-         </div>
+
+      {/* Assignee Avatars */}
+      {assignedToArray.length > 0 && (
+        <div className="flex -space-x-2 mt-3 overflow-hidden">
+          {assignedToArray.map(uid => (
+            <div key={uid} className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900 border-2 border-white dark:border-gray-800 flex items-center justify-center text-[10px] text-indigo-700 dark:text-indigo-300 font-bold" title={uid}>
+              {uid.substring(0, 2).toUpperCase()}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
