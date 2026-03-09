@@ -9,9 +9,11 @@ import {
   serverTimestamp,
   Timestamp,
   doc,
-  updateDoc
+  updateDoc,
+  getDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { createNotification, broadcastNotification } from "./notifications";
 
 export interface AttendanceSession {
   id: string;
@@ -27,12 +29,8 @@ export interface AttendanceSession {
 // Note: serverTimestamp() returns a placeholder, so we can't calc duration immediately on write with it.
 // We usually calculate duration when closing the session.
 
-export async function startSession(userId: string, imageUrl: string) {
+export async function startSession(userId: string, imageUrl: string, userName?: string) {
   const userAttendanceRef = collection(db, "users", userId, "attendance");
-  
-  // Check for any existing active sessions and close them (safety measure)
-  // or prevent starting a new one. For now, let's assume UI handles prevention, 
-  // but we could auto-close previous ones. Let's keep it simple: Create new active session.
   
   await addDoc(userAttendanceRef, {
     clockInAt: serverTimestamp(),
@@ -43,32 +41,31 @@ export async function startSession(userId: string, imageUrl: string) {
     status: "active",
     createdAt: serverTimestamp(),
   });
+
+  // Notify all admins/managers about the clock in
+  // For now, satisfy "Global notification" by broadcasting to everyone or just targeted group
+  // The user said "Whenever any important change happens... sent to all users"
+  await broadcastNotification(
+    "Employee Clocked In", 
+    `${userName || "An employee"} has clocked in for the day.`,
+    { type: "attendance", fromUserId: userId, fromUserName: userName }
+  );
 }
 
-export async function endSession(userId: string, sessionId: string, imageUrl: string) {
+export async function endSession(userId: string, sessionId: string, imageUrl: string, userName?: string) {
   const sessionRef = doc(db, "users", userId, "attendance", sessionId);
-  
-  // We need to fetch the document to calculate duration? 
-  // Ideally, we just set clockOutAt = serverTimestamp().
-  // Duration can be calculated on read or by a cloud function. 
-  // But for simple app, let's calculate it on client? No, client clock is unreliable.
-  // Best approach for accurate duration is Cloud Function triggers on write.
-  // BUT, to keep it simple without cloud functions:
-  // We will trust the serverTimestamp for start and end. 
-  // Duration field is redundant if we have both timestamps, BUT useful for sorting/filtering.
-  // Let's just write clockOutAt and status. We can compute duration on read or update it later.
-  // Actually, let's write duration based on client time difference as a "good enough" estimate 
-  // OR just leave it null and compute on display. 
-  // Let's leave durationSeconds as null/computed on client for now, OR:
-  // Read the doc, get clockInAt (Timestamp), compare with now.
-  // Let's do a read-modify-write transaction if we want accurate duration stored?
-  // Too complex. Let's just set clockOutAt and status.
   
   await updateDoc(sessionRef, {
     clockOutAt: serverTimestamp(),
     clockOutImageUrl: imageUrl,
     status: "completed"
   });
+
+  await broadcastNotification(
+    "Employee Clocked Out", 
+    `${userName || "An employee"} has clocked out.`,
+    { type: "attendance", fromUserId: userId, fromUserName: userName }
+  );
 }
 
 export async function getActiveSession(userId: string): Promise<AttendanceSession | null> {

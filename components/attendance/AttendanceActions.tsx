@@ -22,9 +22,9 @@ export function AttendanceActions() {
       const imageUrl = await uploadImage(file);
       
       if (activeSession && activeSession.status === "active") {
-        await endSession(user.uid, activeSession.id, imageUrl);
+        await endSession(user.uid, activeSession.id, imageUrl, user.displayName || "User");
       } else {
-        await startSession(user.uid, imageUrl);
+        await startSession(user.uid, imageUrl, user.displayName || "User");
       }
       
       await refreshSession(); 

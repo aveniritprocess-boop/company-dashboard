@@ -6,41 +6,53 @@ import { subscribeToUserTasks, updateTaskStatus, Task } from "@/lib/tasks";
 import {
     ListChecks,
     Loader2,
-    Calendar,
-    CheckCircle2,
-    Clock,
     AlertCircle
 } from "lucide-react";
 import { RoleGuard } from "@/components/RoleGuard";
+import { EnhancedTaskCard } from "@/components/tasks/EnhancedTaskCard";
+import { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 
 function YourTasksContent() {
-    const { user } = useAuth();
+    const { user, role } = useAuth();
 
     const [tasks, setTasks] = useState<Task[]>([]);
     const [loading, setLoading] = useState(true);
     const [toast, setToast] = useState<{ msg: string; type: "success" | "error" } | null>(null);
+    const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(true);
 
     useEffect(() => {
         if (!user) return;
-        const unsub = subscribeToUserTasks(user.uid, (data) => {
+        setLoading(true);
+        const unsub = subscribeToUserTasks(user.uid, (data, last) => {
             setTasks(data);
+            setLastDoc(last);
+            setHasMore(data.length === 20); // Syncs with limit(20)
             setLoading(false);
-        });
+        }, 20);
         return () => unsub();
     }, [user]);
+
+    const loadMore = () => {
+        if (!user || !lastDoc || loadingMore || !hasMore) return;
+        setLoadingMore(true);
+        
+        const unsub = subscribeToUserTasks(user.uid, (data, last) => {
+            setTasks(prev => {
+                const newTasks = data.filter(d => !prev.find(p => p.id === d.id));
+                return [...prev, ...newTasks];
+            });
+            setLastDoc(last);
+            setHasMore(data.length === 20);
+            setLoadingMore(false);
+            unsub(); // single fetch essentially
+        }, 20, lastDoc);
+    };
 
     const showToast = (msg: string, type: "success" | "error") => {
         setToast({ msg, type });
         setTimeout(() => setToast(null), 3000);
-    };
-
-    const handleMarkCompleted = async (taskId: string) => {
-        try {
-            await updateTaskStatus(taskId, "completed");
-            showToast("Task marked as completed!", "success");
-        } catch {
-            showToast("Failed to update task.", "error");
-        }
     };
 
     return (
@@ -77,38 +89,27 @@ function YourTasksContent() {
             ) : (
                 <div className="space-y-4">
                     {tasks.map((task) => (
-                        <div
-                            key={task.id}
-                            className="bg-white dark:bg-gray-900 rounded-2xl border border-gray-100 dark:border-gray-800 p-6 hover:shadow-md transition-shadow"
-                        >
-                            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${task.status === "completed" ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"}`}>
-                                            {task.status}
-                                        </span>
-                                        {task.status === "completed" ? <CheckCircle2 className="h-4 w-4 text-emerald-500" /> : <Clock className="h-4 w-4 text-amber-500" />}
-                                    </div>
-                                    <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-medium">
-                                        {task.taskText}
-                                    </p>
-                                    <div className="mt-3 flex items-center gap-1 text-xs text-gray-400">
-                                        <Calendar className="h-3.5 w-3.5" />
-                                        {task.createdAt && task.createdAt.toDate ? task.createdAt.toDate().toLocaleDateString() : "Just now"}
-                                    </div>
-                                </div>
-                                {task.status === "pending" && (
-                                    <button
-                                        onClick={() => handleMarkCompleted(task.id)}
-                                        className="shrink-0 flex items-center justify-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm"
-                                    >
-                                        <CheckCircle2 className="h-4 w-4" />
-                                        Mark Completed
-                                    </button>
-                                )}
-                            </div>
-                        </div>
+                        <EnhancedTaskCard 
+                            key={task.id} 
+                            task={task} 
+                            currentUserId={user!.uid} 
+                            currentUserRole={role || undefined}
+                            currentUserName={user?.displayName || "Employee"}
+                        />
                     ))}
+
+                    {hasMore && (
+                        <div className="flex justify-center pt-4">
+                            <button
+                                onClick={loadMore}
+                                disabled={loadingMore}
+                                className="flex items-center gap-2 px-6 py-2.5 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-xl text-sm font-medium text-emerald-600 dark:text-emerald-500 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-colors disabled:opacity-50"
+                            >
+                                {loadingMore && <Loader2 className="h-4 w-4 animate-spin" />}
+                                {loadingMore ? "Loading..." : "Load More Tasks"}
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>

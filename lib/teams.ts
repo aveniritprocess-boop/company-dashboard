@@ -7,10 +7,19 @@ import {
   query,
   where,
   getDocs,
-  getDoc
+  getDoc,
+  onSnapshot
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Team, TeamMember } from "@/lib/roles";
+import { broadcastNotification } from "./notifications";
+
+export function subscribeToAllTeams(callback: (teams: Team[]) => void) {
+  const q = query(collection(db, "teams"));
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Team)));
+  });
+}
 
 export async function createTeam(teamName: string, ownerUid: string, ownerEmail: string) {
   const teamRef = await addDoc(collection(db, "teams"), {
@@ -25,10 +34,11 @@ export async function createTeam(teamName: string, ownerUid: string, ownerEmail:
     }]
   });
 
-  // Also update the user's document to include this teamId (optional but good for rapid lookups)
-  // For proper normalization we rely on the Team document's members array or a separate 'memberships' collection 
-  // currently we are not strictly maintaining redundant arrays on the user doc to avoid sync issues,
-  // but we might need a separate service to query "teams where user is member"
+  await broadcastNotification(
+    "New Team Formed",
+    `A new team "${teamName}" has been created.`,
+    { type: "record", fromUserId: ownerUid }
+  );
 
   return teamRef.id;
 }
@@ -61,6 +71,13 @@ export async function createTeamWithIndex(teamName: string, ownerUid: string, ow
     }],
     memberUids: [ownerUid] // Index for querying
   });
+
+  await broadcastNotification(
+    "New Team Formed",
+    `A new team "${teamName}" has been created.`,
+    { type: "record", fromUserId: ownerUid }
+  );
+
   return teamRef.id;
 }
 
@@ -77,6 +94,12 @@ export async function addMemberToTeam(teamId: string, member: TeamMember) {
       members: newMembers,
       memberUids: newMemberUids
     });
+
+    await broadcastNotification(
+      "Team Member Added",
+      `${member.email || "A new member"} has been added to the team.`,
+      { type: "record" }
+    );
   }
 }
 
@@ -93,6 +116,12 @@ export async function removeMemberFromTeam(teamId: string, uidToRemove: string) 
       members: newMembers,
       memberUids: newMemberUids
     });
+
+    await broadcastNotification(
+      "Team Member Removed",
+      `A member has been removed from the team.`,
+      { type: "record" }
+    );
   }
 }
 

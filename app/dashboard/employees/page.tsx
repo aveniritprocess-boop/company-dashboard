@@ -8,6 +8,7 @@ import { doc, updateDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { UserRole } from "@/lib/roles";
 import { sendPasswordResetEmail } from "firebase/auth";
+import { broadcastNotification } from "@/lib/notifications";
 import Papa from "papaparse";
 import {
     Users,
@@ -42,7 +43,7 @@ const initialForm = (): CreationForm => ({
 });
 
 function EmployeesContent() {
-    const { role: currentUserRole } = useAuth();
+    const { user, role: currentUserRole } = useAuth();
     const [users, setUsers] = useState<AppUserSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
@@ -105,6 +106,13 @@ function EmployeesContent() {
             const result = await response.json();
             if (result.success) {
                 showToast(`Employee created! Temp Password: ${tempPassword}`, "success");
+                
+                await broadcastNotification(
+                    "New Employee Onboarded",
+                    `${form.name} was added to the ${form.department} department.`,
+                    { type: "record", fromUserName: user?.displayName || "Admin" }
+                );
+
                 setShowCreateModal(false);
                 setForm(initialForm());
                 fetchUsers();
@@ -122,10 +130,18 @@ function EmployeesContent() {
     const handleStatusToggle = async (userId: string, currentStatus: boolean) => {
         setUpdatingUid(userId);
         try {
+            const userToUpdate = users.find(u => u.uid === userId);
             await updateDoc(doc(db, "users", userId), {
                 is_active: !currentStatus,
                 updatedAt: new Date()
             });
+
+            await broadcastNotification(
+                "Employee Status Updated",
+                `${userToUpdate?.name || "An employee"} has been ${!currentStatus ? 'activated' : 'deactivated'}.`,
+                { type: "record", fromUserName: user?.displayName || "Admin" }
+            );
+
             setUsers(users.map(u => u.uid === userId ? { ...u, is_active: !currentStatus } : u));
             showToast(`Account ${!currentStatus ? 'activated' : 'deactivated'}`, "success");
         } catch {
@@ -138,10 +154,18 @@ function EmployeesContent() {
     const handleRoleChange = async (userId: string, newRole: UserRole) => {
         setUpdatingUid(userId);
         try {
+            const userToUpdate = users.find(u => u.uid === userId);
             await updateDoc(doc(db, "users", userId), {
                 role: newRole,
                 updatedAt: new Date()
             });
+
+            await broadcastNotification(
+                "Employee Role Changed",
+                `${userToUpdate?.name || "An employee"} is now a ${newRole}.`,
+                { type: "record", fromUserName: user?.displayName || "Admin" }
+            );
+
             setUsers(users.map(u => u.uid === userId ? { ...u, role: newRole } : u));
             showToast(`Role updated to ${newRole}`, "success");
         } catch {

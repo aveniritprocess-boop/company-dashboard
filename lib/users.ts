@@ -1,4 +1,4 @@
-import { collection, getDocs } from "firebase/firestore";
+import { collection, getDocs, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export interface AppUserSummary {
@@ -38,4 +38,28 @@ export async function getAllUsers(): Promise<AppUserSummary[]> {
             updated_at: data.updated_at || data.updatedAt,
         };
     });
+}
+export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void): () => void {
+  const collectionRef = collection(db, "users");
+  return onSnapshot(collectionRef, (snapshot) => {
+    const users = snapshot.docs.map((d) => {
+      const data = d.data();
+      return {
+        uid: d.id,
+        name: data.name ?? data.displayName ?? null,
+        email: data.email ?? null,
+        role: data.role ?? "employee",
+        mobile: data.mobile,
+        reporting_manager_id: data.reporting_manager_id,
+        department: data.department,
+        location: data.location,
+        employee_id: data.employee_id,
+        is_active: data.is_active ?? true,
+        must_change_password: data.must_change_password ?? false,
+        created_at: data.created_at || data.createdAt,
+        updated_at: data.updated_at || data.updatedAt,
+      };
+    });
+    callback(users);
+  });
 }

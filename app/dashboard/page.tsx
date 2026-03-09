@@ -6,6 +6,8 @@ import { ProgressSummary } from "@/components/ProgressSummary";
 import { DashboardShortcuts } from "@/components/DashboardShortcuts";
 import { DashboardAttendanceWidget } from "@/components/DashboardAttendanceWidget";
 import { RecentActivity } from "@/components/RecentActivity";
+import { TaskAnalyticsWidget } from "@/components/tasks/TaskAnalyticsWidget";
+import { DashboardSearch } from "@/components/DashboardSearch";
 import { Sparkles } from "lucide-react";
 
 export default function DashboardPage() {
@@ -43,11 +45,14 @@ export default function DashboardPage() {
                 <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full w-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
             </div>
 
+            <DashboardSearch />
+
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column: Stats & Shortcuts */}
                 <div className="lg:col-span-8 space-y-8">
                     <DashboardShortcuts />
                     <ProgressSummary />
+                    <TaskAnalyticsWidget />
 
                     {/* Recent Activity Feed */}
                     <div className="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl p-8">

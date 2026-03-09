@@ -84,10 +84,10 @@ export default function DailyDiaryPage() {
         setSubmitting(true);
         try {
             if (editingEntry) {
-                await updateDiaryEntry(editingEntry.id, form);
+                await updateDiaryEntry(editingEntry.id, form, user.uid, user.displayName || "User");
                 showToast("Entry updated successfully.", "success");
             } else {
-                await addDiaryEntry(user.uid, form.date, form.description, form.status);
+                await addDiaryEntry(user.uid, form.date, form.description, form.status, user.displayName || "User");
                 showToast("Entry added successfully.", "success");
             }
             setShowModal(false);

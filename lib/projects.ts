@@ -6,10 +6,19 @@ import {
   query,
   where,
   getDocs,
-  getDoc
+  getDoc,
+  onSnapshot
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { Project } from "@/lib/roles";
+import { broadcastNotification } from "./notifications";
+
+export function subscribeToAllProjects(callback: (projects: Project[]) => void) {
+  const q = query(collection(db, "projects"));
+  return onSnapshot(q, (snapshot) => {
+    callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
+  });
+}
 
 export async function createProject(name: string, description: string, teamId: string, ownerUid: string) {
   const projectRef = await addDoc(collection(db, "projects"), {
@@ -20,6 +29,13 @@ export async function createProject(name: string, description: string, teamId: s
     createdAt: serverTimestamp(),
     status: "active"
   });
+
+  await broadcastNotification(
+    "New Project Created", 
+    `A new project "${name}" has been initialized in the system.`,
+    { type: "record", fromUserId: ownerUid }
+  );
+
   return projectRef.id;
 }
 

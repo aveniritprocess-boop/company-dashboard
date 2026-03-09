@@ -12,6 +12,7 @@ import {
     getDocs
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { broadcastNotification } from "./notifications";
 
 export interface Location {
     id: string;
@@ -35,6 +36,12 @@ export async function createLocation(name: string, code: string, state: string, 
         createdAt: now,
         updatedAt: now,
     });
+
+    await broadcastNotification(
+        "New Location Added",
+        `A new workspace location "${name}" (${code}) has been added to the system.`,
+        { type: "record" }
+    );
 }
 
 export async function updateLocation(locationId: string, data: Partial<Omit<Location, "id" | "createdAt">>) {
@@ -43,11 +50,23 @@ export async function updateLocation(locationId: string, data: Partial<Omit<Loca
         ...data,
         updatedAt: serverTimestamp(),
     });
+
+    await broadcastNotification(
+        "Location Updated",
+        `Details for location ID ${locationId} have been modified.`,
+        { type: "record" }
+    );
 }
 
 export async function deleteLocation(locationId: string) {
     const locationRef = doc(db, LOCATIONS_COLLECTION, locationId);
     await deleteDoc(locationRef);
+
+    await broadcastNotification(
+        "Location Deleted",
+        `A workspace location has been removed from the system.`,
+        { type: "record" }
+    );
 }
 
 export function subscribeToLocations(callback: (locations: Location[]) => void) {

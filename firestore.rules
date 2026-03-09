@@ -61,9 +61,41 @@ service cloud.firestore {
       allow delete: if isAdmin() || (isCEO() && resource.data.assignedBy == request.auth.uid);
     }
     
-    // Default deny
+    // Daily Reports (used internally as dailyDiary)
+    match /dailyDiary/{reportId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || 
+        (isManager() && resource.data.managerId == request.auth.uid) ||
+        resource.data.userId == request.auth.uid
+      );
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (
+        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
+      );
+    }
+    
+    // Notifications Collection
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
+      );
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (
+        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
+      );
+    }
+    
+    // Performance Scores
+    match /performance_scores/{scoreId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || isManager() || resource.data.userId == request.auth.uid
+      );
+      allow write: if isCEO() || isAdmin() || isManager();
+    }
+    
+    // Default deny for everything else
     match /{document=**} {
-      allow read, write: if isAdmin();
+      allow read, write: if false;
     }
   }
 }
