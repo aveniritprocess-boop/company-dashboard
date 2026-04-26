@@ -28,6 +28,36 @@ export interface AppNotification {
 }
 
 const NOTIFICATIONS_COLLECTION = "notifications";
+const MAIL_COLLECTION = "mail";
+
+export async function sendEmail(
+  to: string | string[],
+  subject: string,
+  text: string,
+  html?: string
+): Promise<void> {
+  try {
+    const response = await fetch("/api/send-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        to,
+        subject,
+        text,
+        html: html || text.replace(/\n/g, "<br>"),
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      console.error("Failed to send email via API:", error);
+    }
+  } catch (error) {
+    console.error("Error calling send-email API:", error);
+  }
+}
 
 export async function createNotification(
   userId: string,

@@ -16,6 +16,8 @@ import {
   DocumentData
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import { createNotification, sendEmail } from "./notifications";
+import { getUserById } from "./users";
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Proposal" | "Negotiation" | "Won" | "Lost" | "Pending" | "In Progress" | "Resolved";
 
@@ -47,12 +49,37 @@ export async function addLead(
 ) {
   const col = COLLECTIONS[type];
   const now = serverTimestamp();
-  await addDoc(collection(db, col), {
+  const leadRef = await addDoc(collection(db, col), {
     ...data,
     type,
     createdAt: now,
     updatedAt: now,
   });
+
+  // Notification for assignment
+  if (data.assignedTo) {
+    const leadPath = type === "sales" ? "/dashboard/sales-leads" : "/dashboard/service-leads";
+    const title = type === "sales" ? "New Sales Lead Assigned" : "New Service Lead Assigned";
+    const msg = `You have been assigned a new ${type} lead: "${data.title}" for client ${data.clientName}`;
+
+    await createNotification(data.assignedTo, title, msg, {
+      link: leadPath,
+      type: "record",
+      fromUserId: data.createdBy,
+      fromUserName: data.createdByName
+    });
+
+    // Email Notification
+    const assignee = await getUserById(data.assignedTo);
+    if (assignee?.email) {
+      await sendEmail(
+        assignee.email,
+        title,
+        `Hello ${assignee.name},\n\n${msg}\n\nClient: ${data.clientName}\nNotes: ${data.notes}\n\nView it on the dashboard: https://company-dashboard-avenirit.web.app${leadPath}`,
+        `<p>Hello ${assignee.name},</p><p>${msg}</p><p><strong>Client:</strong> ${data.clientName}<br><strong>Notes:</strong> ${data.notes}</p><p>View it on the <a href="https://company-dashboard-avenirit.web.app${leadPath}">Dashboard</a></p>`
+      );
+    }
+  }
 }
 
 export async function updateLead(
@@ -62,10 +89,36 @@ export async function updateLead(
 ) {
   const col = COLLECTIONS[type];
   const ref = doc(db, col, id);
+  
+  // We need current lead data to check if assignment changed
+  // But for simplicity and to satisfy the user request "whenever i am assigning", 
+  // if data.assignedTo is present in the update, we'll notify.
+  
   await updateDoc(ref, {
     ...data,
     updatedAt: serverTimestamp(),
   });
+
+  if (data.assignedTo) {
+    const leadPath = type === "sales" ? "/dashboard/sales-leads" : "/dashboard/service-leads";
+    const title = type === "sales" ? "Sales Lead Assignment Updated" : "Service Lead Assignment Updated";
+    const msg = `You have been assigned or re-assigned a ${type} lead: "${data.title}"`;
+
+    await createNotification(data.assignedTo, title, msg, {
+      link: leadPath,
+      type: "record",
+    });
+
+    const assignee = await getUserById(data.assignedTo);
+    if (assignee?.email) {
+      await sendEmail(
+        assignee.email,
+        title,
+        `Hello ${assignee.name},\n\n${msg}\n\nView it on the dashboard: https://company-dashboard-avenirit.web.app${leadPath}`,
+        `<p>Hello ${assignee.name},</p><p>${msg}</p><p>View it on the <a href="https://company-dashboard-avenirit.web.app${leadPath}">Dashboard</a></p>`
+      );
+    }
+  }
 }
 
 export async function deleteLead(type: "sales" | "service", id: string) {

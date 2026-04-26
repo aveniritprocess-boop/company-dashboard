@@ -16,7 +16,8 @@ import {
   DocumentData
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { createNotification } from "./notifications";
+import { createNotification, sendEmail } from "./notifications";
+import { getUserById } from "./users";
 
 export type TaskStatus = "pending" | "completed" | "backlog" | "todo" | "in_progress" | "done";
 
@@ -93,9 +94,31 @@ export async function createTask(
   if (Array.isArray(assignedTo)) {
     for (const uid of assignedTo) {
       await createNotification(uid, "New Task Assigned", `You have been assigned a new task: "${taskText}"`, notificationOptions);
+      
+      // Email Notification
+      const assignee = await getUserById(uid);
+      if (assignee?.email) {
+        await sendEmail(
+          assignee.email,
+          "New Task Assigned",
+          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: https://company-dashboard-avenirit.web.app/dashboard/your-tasks`,
+          `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="https://company-dashboard-avenirit.web.app/dashboard/your-tasks">Dashboard</a></p>`
+        );
+      }
     }
   } else if (assignedTo) {
     await createNotification(assignedTo, "New Task Assigned", `You have been assigned a new task: "${taskText}"`, notificationOptions);
+    
+    // Email Notification
+    const assignee = await getUserById(assignedTo);
+    if (assignee?.email) {
+      await sendEmail(
+        assignee.email,
+        "New Task Assigned",
+        `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: https://company-dashboard-avenirit.web.app/dashboard/your-tasks`,
+        `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="https://company-dashboard-avenirit.web.app/dashboard/your-tasks">Dashboard</a></p>`
+      );
+    }
   }
 }
 

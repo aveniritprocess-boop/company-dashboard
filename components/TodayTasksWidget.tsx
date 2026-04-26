@@ -4,19 +4,19 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { subscribeToAllTasks, subscribeToTaskComments, Task, TaskComment } from "@/lib/tasks";
 import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
-import { 
-  CheckCircle2, 
-  Clock, 
-  MessageSquare, 
-  User, 
-  Calendar,
-  Loader2,
-  ChevronRight
+import {
+    CheckCircle2,
+    Clock,
+    MessageSquare,
+    User,
+    Calendar,
+    Loader2,
+    ChevronRight
 } from "lucide-react";
 import Link from "next/link";
 
 interface TaskWithComments extends Task {
-  lastComment?: TaskComment;
+    lastComment?: TaskComment;
 }
 
 export function TodayTasksWidget() {
@@ -57,7 +57,7 @@ export function TodayTasksWidget() {
                 subscribeToTaskComments(task.id, (comments) => {
                     if (comments.length > 0) {
                         const lastComment = comments[comments.length - 1];
-                        setTasks(prev => prev.map(t => 
+                        setTasks(prev => prev.map(t =>
                             t.id === task.id ? { ...t, lastComment } : t
                         ));
                     }
@@ -96,8 +96,8 @@ export function TodayTasksWidget() {
                         Live overview of today's assignments and responses.
                     </p>
                 </div>
-                <Link 
-                    href="/dashboard/your-tasks" 
+                <Link
+                    href="/dashboard/your-tasks"
                     className="p-2 hover:bg-slate-50 dark:hover:bg-slate-800 rounded-xl transition-colors group"
                 >
                     <ChevronRight className="h-5 w-5 text-slate-400 group-hover:text-indigo-500" />
@@ -117,8 +117,8 @@ export function TodayTasksWidget() {
             ) : (
                 <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar max-h-[400px]">
                     {tasks.map((task) => (
-                        <div 
-                            key={task.id} 
+                        <div
+                            key={task.id}
                             className="group bg-slate-50 dark:bg-slate-800/40 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-100 dark:hover:border-slate-700 p-4 rounded-2xl transition-all duration-300"
                         >
                             <div className="flex items-start justify-between gap-4">
@@ -129,18 +129,17 @@ export function TodayTasksWidget() {
                                     <div className="flex flex-wrap items-center gap-3 mt-2">
                                         <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                                             <User className="h-3 w-3" />
-                                            {Array.isArray(task.assignedTo) 
+                                            {Array.isArray(task.assignedTo)
                                                 ? task.assignedTo.map(uid => users[uid] || "User").join(", ")
                                                 : users[task.assignedTo as string] || "User"
                                             }
                                         </div>
-                                        <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${
-                                            task.status === 'completed' || task.status === 'done' 
-                                            ? 'text-emerald-500' 
+                                        <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${task.status === 'completed' || task.status === 'done'
+                                            ? 'text-emerald-500'
                                             : 'text-amber-500'
-                                        }`}>
-                                            {task.status === 'completed' || task.status === 'done' 
-                                                ? <CheckCircle2 className="h-3 w-3" /> 
+                                            }`}>
+                                            {task.status === 'completed' || task.status === 'done'
+                                                ? <CheckCircle2 className="h-3 w-3" />
                                                 : <Clock className="h-3 w-3" />
                                             }
                                             {task.status.replace("_", " ")}
@@ -151,6 +150,7 @@ export function TodayTasksWidget() {
 
                             {task.lastComment && (
                                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50">
+                                    "{task.lastComment.comment}"
                                     <div className="flex items-start gap-2 bg-white dark:bg-slate-900/50 p-2 rounded-xl">
                                         <MessageSquare className="h-3 w-3 text-indigo-400 mt-0.5 shrink-0" />
                                         <div className="min-w-0">
@@ -158,7 +158,6 @@ export function TodayTasksWidget() {
                                                 {task.lastComment.commentedByName || "User"} response:
                                             </p>
                                             <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 italic leading-relaxed">
-                                                "{task.lastComment.comment"
                                             </p>
                                         </div>
                                     </div>

@@ -1,4 +1,4 @@
-import { collection, getDocs, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export interface AppUserSummary {
@@ -62,4 +62,25 @@ export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void)
     });
     callback(users);
   });
+}
+
+export async function getUserById(uid: string): Promise<AppUserSummary | null> {
+    const userDoc = await getDoc(doc(db, "users", uid));
+    if (!userDoc.exists()) return null;
+    const data = userDoc.data();
+    return {
+        uid: userDoc.id,
+        name: data.name ?? data.displayName ?? null,
+        email: data.email ?? null,
+        role: data.role ?? "employee",
+        mobile: data.mobile,
+        reporting_manager_id: data.reporting_manager_id,
+        department: data.department,
+        location: data.location,
+        employee_id: data.employee_id,
+        is_active: data.is_active ?? true,
+        must_change_password: data.must_change_password ?? false,
+        created_at: data.created_at || data.createdAt,
+        updated_at: data.updated_at || data.updatedAt,
+    };
 }

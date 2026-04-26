@@ -1,0 +1,40 @@
+import { NextResponse } from "next/server";
+import nodemailer from "nodemailer";
+
+export async function POST(request: Request) {
+  try {
+    const { to, subject, html, text } = await request.json();
+    
+    const user = process.env.GMAIL_USER; // avenir.itprocess@gmail.com
+    const pass = process.env.GMAIL_APP_PASSWORD; // The 16-character app password
+
+    if (!user || !pass) {
+      console.error("GMAIL_USER or GMAIL_APP_PASSWORD is not set");
+      return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
+    }
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: user,
+        pass: pass,
+      },
+    });
+
+    const mailOptions = {
+      from: `"Avenir Tech" <${user}>`,
+      to: Array.isArray(to) ? to.join(", ") : to,
+      subject: subject,
+      text: text,
+      html: html || text,
+    };
+
+    const info = await transporter.sendMail(mailOptions);
+    console.log("Email sent: " + info.response);
+
+    return NextResponse.json({ success: true, id: info.messageId });
+  } catch (error: any) {
+    console.error("Send Email Error:", error);
+    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  }
+}
