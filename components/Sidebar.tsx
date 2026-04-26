@@ -14,6 +14,8 @@ import {
   UserCheck,
   MapPin,
   TableProperties,
+  TrendingUp,
+  Headset,
 } from "lucide-react";
 import { SidebarUser } from "./SidebarUser";
 import { useAuth } from "./AuthProvider";
@@ -73,6 +75,8 @@ export function Sidebar() {
       ? [{ name: "Locations", href: "/dashboard/locations", icon: MapPin }]
       : []),
     { name: "Progress", href: "/dashboard/progress", icon: BarChart },
+    { name: "Sales Leads", href: "/dashboard/sales-leads", icon: TrendingUp },
+    { name: "Service Leads", href: "/dashboard/service-leads", icon: Headset },
     { name: "Settings", href: "/dashboard/settings", icon: Settings },
   ];
 
@@ -166,7 +170,7 @@ export function Sidebar() {
         {[
           {
             label: "Main Menu",
-            items: navigation.filter(i => ["Dashboard", "Daily Diary", "Your Tasks", "Shared Sheet", "Attendance", "Progress"].includes(i.name))
+            items: navigation.filter(i => ["Dashboard", "Daily Diary", "Your Tasks", "Shared Sheet", "Attendance", "Progress", "Sales Leads", "Service Leads"].includes(i.name))
           },
           ...(role === "admin" || role === "manager" || role === "ceo" ? [
             {

@@ -93,6 +93,30 @@ service cloud.firestore {
       allow write: if isCEO() || isAdmin() || isManager();
     }
     
+    // Sales Leads
+    match /salesLeads/{leadId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      );
+      allow delete: if isCEO() || isAdmin();
+    }
+
+    // Service Leads
+    match /serviceLeads/{leadId} {
+      allow read: if isSignedIn() && (
+        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      );
+      allow create: if isSignedIn();
+      allow update: if isSignedIn() && (
+        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      );
+      allow delete: if isCEO() || isAdmin();
+    }
+
     // Default deny for everything else
     match /{document=**} {
       allow read, write: if false;

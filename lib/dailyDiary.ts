@@ -102,3 +102,21 @@ export function subscribeToDiaryEntries(
     callback(entries, lastDoc);
   });
 }
+export function subscribeToAllDiaryEntriesByDate(
+  date: string, // "YYYY-MM-DD"
+  callback: (entries: DailyDiaryEntry[]) => void
+): () => void {
+  const q = query(
+    collection(db, COLLECTION),
+    where("date", "==", date),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const entries = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as DailyDiaryEntry[];
+    callback(entries);
+  });
+}

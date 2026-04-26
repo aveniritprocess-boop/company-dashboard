@@ -8,6 +8,8 @@ import { DashboardAttendanceWidget } from "@/components/DashboardAttendanceWidge
 import { RecentActivity } from "@/components/RecentActivity";
 import { TaskAnalyticsWidget } from "@/components/tasks/TaskAnalyticsWidget";
 import { DashboardSearch } from "@/components/DashboardSearch";
+import { TodayTasksWidget } from "@/components/TodayTasksWidget";
+import { DayReportWidget } from "@/components/DayReportWidget";
 import { Sparkles } from "lucide-react";
 
 export default function DashboardPage() {
@@ -52,6 +54,12 @@ export default function DashboardPage() {
                 <div className="lg:col-span-8 space-y-8">
                     <DashboardShortcuts />
                     <ProgressSummary />
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <TodayTasksWidget />
+                        <DayReportWidget />
+                    </div>
+
                     <TaskAnalyticsWidget />
 
                     {/* Recent Activity Feed */}
