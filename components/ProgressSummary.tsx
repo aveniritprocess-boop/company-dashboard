@@ -2,18 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { getCachedTodos, getCachedTasks } from "@/lib/db";
+import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { subscribeToAllTasksForUser } from "@/lib/tasks";
 import { CheckCircle2, ListTodo, Activity, TrendingUp } from "lucide-react";
 import { ProgressChart } from "./charts/ProgressChart";
 
 interface Todo {
   id: string;
   completed: boolean;
-}
-
-interface Task {
-  id: string;
-  status: "pending" | "completed";
 }
 
 export function ProgressSummary() {
@@ -27,32 +24,53 @@ export function ProgressSummary() {
   });
 
   useEffect(() => {
-    async function fetchStats() {
-      if (!user) return;
+    if (!user) return;
 
-      try {
-        const [{ data: todos }, { data: tasks }] = await Promise.all([
-          getCachedTodos(user.uid),
-          getCachedTasks(user.uid)
-        ]);
+    Promise.resolve().then(() => setStats(prev => ({ ...prev, loading: true })));
+    let todosDone = false;
+    let tasksDone = false;
 
-        const typedTodos = todos as Todo[];
-        const typedTasks = tasks as Task[];
+    // 1. Subscribe to User Todos in real-time
+    const todosRef = collection(db, "users", user.uid, "todos");
+    const qTodos = query(todosRef, orderBy("createdAt", "desc"));
+    const unsubTodos = onSnapshot(qTodos, (snapshot) => {
+      const data = snapshot.docs.map(doc => ({
+        id: doc.id,
+        completed: doc.data().completed || false,
+      })) as Todo[];
+      todosDone = true;
+      setStats(prev => ({
+        ...prev,
+        totalTodos: data.length,
+        completedTodos: data.filter(t => t.completed).length,
+        loading: !(todosDone && tasksDone)
+      }));
+    }, (error) => {
+      console.error("Failed to subscribe to user todos", error);
+      todosDone = true;
+      setStats(prev => ({ ...prev, loading: !(todosDone && tasksDone) }));
+    });
 
-        setStats({
-          totalTodos: typedTodos.length,
-          completedTodos: typedTodos.filter(t => t.completed).length,
-          totalTasks: typedTasks.length,
-          completedTasks: typedTasks.filter(t => t.status === "completed").length,
-          loading: false,
-        });
-      } catch (error) {
-        console.error("Failed to fetch stats", error);
-        setStats(prev => ({ ...prev, loading: false }));
-      }
-    }
+    // 2. Subscribe to User Tasks in real-time
+    const unsubTasks = subscribeToAllTasksForUser(user.uid, (data) => {
+      // Filter tasks assigned to the user
+      const myTasks = data.filter(t => {
+        const arr = Array.isArray(t.assignedTo) ? t.assignedTo : t.assignedTo ? [t.assignedTo] : [];
+        return arr.includes(user.uid);
+      });
+      tasksDone = true;
+      setStats(prev => ({
+        ...prev,
+        totalTasks: myTasks.length,
+        completedTasks: myTasks.filter(t => t.status === "completed" || t.status === "approved" || t.status === "done").length,
+        loading: !(todosDone && tasksDone)
+      }));
+    });
 
-    fetchStats();
+    return () => {
+      unsubTodos();
+      unsubTasks();
+    };
   }, [user]);
 
   if (stats.loading) {

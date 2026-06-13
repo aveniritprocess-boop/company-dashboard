@@ -14,7 +14,8 @@ export function TaskBoard() {
 
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDesc, setNewTaskDesc] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high">("medium");
+  const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "critical">("medium");
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!user) return;
@@ -33,9 +34,10 @@ export function TaskBoard() {
     if (!user || !newTaskTitle.trim()) return;
 
     try {
+      setError("");
       await createTask(
-        newTaskTitle,
-        newTaskDesc,
+        newTaskTitle.trim(),
+        newTaskDesc.trim(),
         user.uid,
         [user.uid], // Assign to self by default
         newTaskPriority
@@ -44,9 +46,9 @@ export function TaskBoard() {
       setNewTaskTitle("");
       setNewTaskDesc("");
       setNewTaskPriority("medium");
-    } catch (error) {
-      console.error("Failed to create task", error);
-      alert("Failed to create task");
+    } catch (err: unknown) {
+      console.error("Failed to create task", err);
+      setError("Failed to create task. Please try again.");
     }
   };
 
@@ -94,6 +96,11 @@ export function TaskBoard() {
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6 animate-in fade-in zoom-in duration-200">
             <h3 className="text-lg font-bold mb-4 text-gray-900 dark:text-white">Create New Task</h3>
             <form onSubmit={handleCreateTask} className="space-y-4">
+              {error && (
+                <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-900/30">
+                  {error}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Title</label>
                 <input
@@ -119,11 +126,12 @@ export function TaskBoard() {
                 <select
                   className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 text-sm"
                   value={newTaskPriority}
-                  onChange={(e) => setNewTaskPriority(e.target.value as "low" | "medium" | "high")}
+                  onChange={(e) => setNewTaskPriority(e.target.value as "low" | "medium" | "high" | "critical")}
                 >
                   <option value="low">Low</option>
                   <option value="medium">Medium</option>
                   <option value="high">High</option>
+                  <option value="critical">Critical</option>
                 </select>
               </div>
               <div className="flex justify-end gap-2 pt-2">
@@ -138,7 +146,7 @@ export function TaskBoard() {
                   type="submit"
                   className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg"
                 >
-                  Create Field
+                  Create Task
                 </button>
               </div>
             </form>

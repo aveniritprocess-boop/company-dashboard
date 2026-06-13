@@ -3,7 +3,6 @@
 import { useAuth } from "@/components/AuthProvider";
 import {
   ClipboardList,
-  ListChecks,
   BarChart3,
   Settings,
   Zap,
@@ -20,22 +19,13 @@ export function DashboardShortcuts() {
       href: "/dashboard/daily-diary",
       icon: ClipboardList,
       theme: "blue" as const,
-      description: "Log your daily work",
-    },
-    {
-      name: "Your Tasks",
-      href: "/dashboard/your-tasks",
-      icon: ListChecks,
-      theme: "green" as const,
-      description: "Tasks assigned to you",
     },
     ...(role === "admin" || role === "ceo" || role === "manager"
       ? [{
-        name: "Task Given By Sir",
-        href: "/dashboard/task-given-by-sir",
+        name: "Task Assigned",
+        href: "/dashboard/tasks-assigned",
         icon: UserCheck,
         theme: "orange" as const,
-        description: "Assign & track team tasks",
       }]
       : []),
     {
@@ -43,14 +33,12 @@ export function DashboardShortcuts() {
       href: "/dashboard/progress",
       icon: BarChart3,
       theme: "purple" as const,
-      description: "Your completion stats",
     },
     {
       name: "Settings",
       href: "/dashboard/settings",
       icon: Settings,
       theme: "gray" as const,
-      description: "Account preferences",
     },
   ];
 

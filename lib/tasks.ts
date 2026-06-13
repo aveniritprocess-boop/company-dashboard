@@ -13,13 +13,14 @@ import {
   limit,
   startAfter,
   QueryDocumentSnapshot,
-  DocumentData
+  DocumentData,
+  FieldValue
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { createNotification, sendEmail } from "./notifications";
 import { getUserById } from "./users";
 
-export type TaskStatus = "pending" | "completed" | "backlog" | "todo" | "in_progress" | "done";
+export type TaskStatus = "pending" | "in_progress" | "completed" | "approved" | "rejected" | "hold" | "backlog" | "todo" | "done" | "review";
 
 export interface Task {
   id: string;
@@ -31,16 +32,19 @@ export interface Task {
   assigned_to?: string | string[]; // Alias for assignedTo
   assigned_by?: string; // Alias for assignedBy
   createdBy: string; // Alias for assignedBy used in Kanban
-  priority: "low" | "medium" | "high";
+  priority: "low" | "medium" | "high" | "critical";
   status: TaskStatus;
   dueDate?: string;
-  createdAt: Timestamp;
-  updatedAt?: Timestamp;
-  created_at?: Timestamp; // Alias for createdAt
-  updated_at?: Timestamp; // Alias for updatedAt
+  createdAt: Timestamp | FieldValue;
+  updatedAt?: Timestamp | FieldValue;
+  created_at?: Timestamp | FieldValue; // Alias for createdAt
+  updated_at?: Timestamp | FieldValue; // Alias for updatedAt
   progress?: number;
   startDate?: string;
-  completedAt?: Timestamp | null;
+  completedAt?: Timestamp | FieldValue | null;
+  mentionedUsers?: string[];
+  attachments?: { name: string; size: string; url: string; }[];
+  teamId?: string | null;
 }
 
 export interface TaskComment {
@@ -49,6 +53,16 @@ export interface TaskComment {
   comment: string;
   commentedBy: string;
   commentedByName?: string;
+  createdAt: Timestamp;
+  mentionedUsers?: string[];
+}
+
+export interface TaskHistoryItem {
+  id: string;
+  taskId: string;
+  message: string;
+  performedBy: string;
+  performedByName: string;
   createdAt: Timestamp;
 }
 
@@ -61,10 +75,14 @@ export async function createTask(
   assignedTo: string | string[],
   priority: string = "medium",
   startDate?: string,
-  dueDate?: string
+  dueDate?: string,
+  mentionedUsers?: string[],
+  status: TaskStatus = "pending",
+  attachments: { name: string; size: string; url: string; }[] = [],
+  teamId: string = ""
 ) {
   const now = serverTimestamp();
-  await addDoc(collection(db, TASKS_COLLECTION), {
+  const docRef = await addDoc(collection(db, TASKS_COLLECTION), {
     taskText,
     description,
     assignedTo,
@@ -73,14 +91,17 @@ export async function createTask(
     assigned_by: assignedBy,
     createdBy: assignedBy, // Ensure both exist for compatibility
     priority,
-    status: "pending",
-    progress: 0,
+    status,
+    progress: status === "completed" ? 100 : 0,
     startDate: startDate || null,
     dueDate: dueDate || null,
     createdAt: now,
     created_at: now,
     updatedAt: now,
     updated_at: now,
+    mentionedUsers: mentionedUsers || [],
+    attachments: attachments,
+    teamId: teamId || null,
   });
 
   // Trigger Notifications to the assignee(s)
@@ -120,13 +141,23 @@ export async function createTask(
       );
     }
   }
+
+  if (mentionedUsers && mentionedUsers.length > 0) {
+    for (const uid of mentionedUsers) {
+      if (uid !== assignedBy && (!Array.isArray(assignedTo) ? uid !== assignedTo : !assignedTo.includes(uid))) {
+        await createNotification(uid, "You were mentioned", `You were mentioned in a new task: "${taskText}"`, notificationOptions);
+      }
+    }
+  }
+
+  return docRef.id;
 }
 
 export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   const now = serverTimestamp();
   
-  const updates: any = {
+  const updates: Partial<Task> = {
     status,
     updatedAt: now,
     updated_at: now,
@@ -138,6 +169,9 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   } else if (status === "pending") {
     updates.progress = 0;
     updates.completedAt = null;
+  } else if (status === "in_progress") {
+    updates.progress = 50;
+    updates.completedAt = null;
   }
 
   await updateDoc(taskRef, updates);
@@ -147,7 +181,7 @@ export async function updateTaskProgress(taskId: string, progress: number, taskT
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   const now = serverTimestamp();
   
-  const updates: any = {
+  const updates: Partial<Task> = {
     progress,
     updatedAt: now,
     updated_at: now,
@@ -164,7 +198,7 @@ export async function updateTaskProgress(taskId: string, progress: number, taskT
         "Task Completed", 
         `"${taskTitle}" has been marked as 100% complete!`,
         {
-          link: "/dashboard/task-given-by-sir",
+          link: "/dashboard/tasks-assigned",
           type: "task"
         }
       );
@@ -201,7 +235,8 @@ export async function addTaskComment(
   commentedByName?: string,
   taskTitle: string = "a task",
   taskAssignedBy?: string, // Admin
-  taskAssignedTo?: string | string[] // Assignees
+  taskAssignedTo?: string | string[], // Assignees
+  mentionedUsers?: string[]
 ) {
   const commentsRef = collection(db, TASKS_COLLECTION, taskId, "comments");
   const now = serverTimestamp();
@@ -211,6 +246,7 @@ export async function addTaskComment(
     commentedBy,
     commentedByName: commentedByName || "",
     createdAt: now,
+    mentionedUsers: mentionedUsers || [],
   });
 
   // Notify the relevant parties
@@ -228,7 +264,7 @@ export async function addTaskComment(
       taskAssignedBy, 
       "New Comment", 
       notifMsg, 
-      { ...commonOptions, link: "/dashboard/task-given-by-sir" }
+      { ...commonOptions, link: "/dashboard/tasks-assigned" }
     );
   }
 
@@ -237,6 +273,14 @@ export async function addTaskComment(
     for (const uid of assignees) {
       if (uid !== commentedBy) {
         await createNotification(uid, "New Comment", notifMsg, { ...commonOptions, link });
+      }
+    }
+  }
+
+  if (mentionedUsers && mentionedUsers.length > 0) {
+    for (const uid of mentionedUsers) {
+      if (uid !== commentedBy) {
+        await createNotification(uid, "You were mentioned", `You were mentioned in a comment on "${taskTitle}"`, { ...commonOptions, link });
       }
     }
   }
@@ -347,3 +391,182 @@ export function subscribeToAllTasks(
     callback(tasks, lastDoc);
   });
 }
+
+// Function to subscribe to tasks created in the last N days
+export function subscribeToRecentTasks(
+  days: number,
+  callback: (tasks: Task[]) => void
+) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    where("createdAt", ">=", cutoffDate),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const tasks = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Task[];
+    callback(tasks);
+  });
+}
+
+// Subscribe to recent tasks relevant to a specific user (assigned to them OR by them)
+export function subscribeToRecentTasksForUser(
+  userId: string,
+  days: number,
+  callback: (tasks: Task[]) => void
+) {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+
+  // Query tasks assigned to user
+  const qAssignedTo = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedTo", "array-contains", userId),
+    where("createdAt", ">=", cutoffDate),
+    orderBy("createdAt", "desc")
+  );
+
+  // Query tasks assigned by user
+  const qAssignedBy = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedBy", "==", userId),
+    where("createdAt", ">=", cutoffDate),
+    orderBy("createdAt", "desc")
+  );
+
+  const merged = new Map<string, Task>();
+  let latestTo: Task[] = [];
+  let latestBy: Task[] = [];
+
+  const emit = () => {
+    merged.clear();
+    [...latestTo, ...latestBy].forEach(t => merged.set(t.id, t));
+    const result = Array.from(merged.values()).sort((a, b) => {
+      const tA = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tB = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tB - tA;
+    });
+    callback(result);
+  };
+
+  const unsubTo = onSnapshot(qAssignedTo, (snap) => {
+    latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  });
+
+  const unsubBy = onSnapshot(qAssignedBy, (snap) => {
+    latestBy = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  });
+
+  return () => { unsubTo(); unsubBy(); };
+}
+
+// Subscribe to ALL tasks a user is involved in (assigned to them OR assigned by them)
+export function subscribeToAllTasksForUser(
+  userId: string,
+  callback: (tasks: Task[]) => void
+) {
+  const merged = new Map<string, Task>();
+  let latestTo: Task[] = [];
+  let latestToArray: Task[] = [];
+  let latestBy: Task[] = [];
+
+  const emit = () => {
+    merged.clear();
+    [...latestTo, ...latestToArray, ...latestBy].forEach(t => merged.set(t.id, t));
+    const result = Array.from(merged.values()).sort((a, b) => {
+      const tA = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tB = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tB - tA;
+    });
+    callback(result);
+  };
+
+  const qTo = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedTo", "==", userId)
+  );
+
+  const qToArray = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedTo", "array-contains", userId)
+  );
+
+  const qBy = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedBy", "==", userId)
+  );
+
+  const unsubTo = onSnapshot(qTo, (snap) => {
+    latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  });
+
+  const unsubToArray = onSnapshot(qToArray, (snap) => {
+    latestToArray = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  });
+
+  const unsubBy = onSnapshot(qBy, (snap) => {
+    latestBy = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  });
+
+  return () => {
+    unsubTo();
+    unsubToArray();
+    unsubBy();
+  };
+}
+
+// History tracking
+export async function addTaskHistory(
+  taskId: string,
+  message: string,
+  performedBy: string,
+  performedByName: string
+) {
+  const historyRef = collection(db, TASKS_COLLECTION, taskId, "history");
+  await addDoc(historyRef, {
+    taskId,
+    message,
+    performedBy,
+    performedByName,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export function subscribeToTaskHistory(taskId: string, callback: (history: TaskHistoryItem[]) => void) {
+  const historyRef = collection(db, TASKS_COLLECTION, taskId, "history");
+  const q = query(historyRef, orderBy("createdAt", "desc"));
+
+  return onSnapshot(q, (snapshot) => {
+    const history = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as TaskHistoryItem[];
+    callback(history);
+  });
+}
+
+export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void) {
+  const q = query(
+    collection(db, TASKS_COLLECTION),
+    orderBy("createdAt", "desc")
+  );
+  return onSnapshot(q, (snapshot) => {
+    const tasks = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    })) as Task[];
+    callback(tasks);
+  });
+}
+

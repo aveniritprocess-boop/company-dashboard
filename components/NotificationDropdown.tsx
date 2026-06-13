@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Bell, Check, Trash2, X, User as UserIcon, Calendar, FileText, Info } from "lucide-react";
+import { Bell, X, User as UserIcon, Calendar, FileText } from "lucide-react";
 import { AppNotification, subscribeToNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "@/lib/notifications";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "./ToastProvider";
@@ -107,7 +107,7 @@ export function NotificationDropdown() {
                   <Bell className="h-6 w-6 text-slate-300 dark:text-slate-600" />
                 </div>
                 <p className="font-medium text-sm">No notifications yet</p>
-                <p className="text-xs mt-1 opacity-70">When you receive updates, they'll appear here.</p>
+                <p className="text-xs mt-1 opacity-70">When you receive updates, they&apos;ll appear here.</p>
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800/50">
@@ -176,4 +176,4 @@ const Wrapper = ({ link, onClick, children }: { link?: string, onClick: () => vo
       {children}
     </button>
   );
-};
+};   

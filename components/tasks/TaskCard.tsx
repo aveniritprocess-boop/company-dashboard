@@ -19,6 +19,7 @@ export function TaskCard({ task, currentUserId }: TaskCardProps) {
     low: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
     medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
     high: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+    critical: "bg-red-200 text-red-900 dark:bg-red-950/40 dark:text-red-305",
   };
 
   const handleMove = async (direction: "next" | "prev") => {

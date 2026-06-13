@@ -1,49 +1,35 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { signInWithEmailAndPassword, signInWithPopup, getMultiFactorResolver, PhoneAuthProvider, PhoneMultiFactorGenerator, RecaptchaVerifier } from "firebase/auth";
-import { doc, setDoc, getDoc } from "firebase/firestore";
-import { useRouter } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
+import { signInWithPopup, signInWithEmailAndPassword, getMultiFactorResolver, PhoneAuthProvider, PhoneMultiFactorGenerator, RecaptchaVerifier } from "firebase/auth";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
-import Link from "next/link";
 
 export default function LoginPage() {
+  const [error, setError] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
   // MFA State
-  const [mfaResolver, setMfaResolver] = useState<any>(null); // eslint-disable-line @typescript-eslint/no-explicit-any
-
+  const [mfaResolver, setMfaResolver] = useState<import("firebase/auth").MultiFactorResolver | null>(null);
   const [verificationId, setVerificationId] = useState("");
   const [code, setCode] = useState("");
   const [showMfa, setShowMfa] = useState(false);
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError("");
-    try {
-      await signInWithEmailAndPassword(auth, email, password);
-      // eslint-disable-next-line react-hooks/immutability
-      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-      router.push("/dashboard");
-    } catch (error: unknown) {
-      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (err.code === "auth/multi-factor-auth-required") {
-        setShowMfa(true);
-        setMfaResolver(getMultiFactorResolver(auth, err));
-        initMfa(getMultiFactorResolver(auth, err));
-      } else {
-        setError(err.message);
+  useEffect(() => {
+    // Show session expired message if redirected
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("expired") === "true") {
+        setError("Your session has expired. Please sign in again.");
       }
     }
-  };
+  }, []);
 
-  const initMfa = async (resolver: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    // Find the enrolled phone factor
-    const phoneHint = resolver.hints.find((hint: any) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID); // eslint-disable-line @typescript-eslint/no-explicit-any
+  const initMfa = async (resolver: import("firebase/auth").MultiFactorResolver) => {
+    const phoneHint = resolver.hints.find((hint) => hint.factorId === PhoneMultiFactorGenerator.FACTOR_ID);
     if (!phoneHint) {
       setError("No supported second factor found.");
       return;
@@ -65,182 +51,265 @@ export default function LoginPage() {
         window.recaptchaVerifier
       );
       setVerificationId(vId);
-    } catch (error: unknown) {
-      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError("Failed to send MFA code: " + err.message);
+    } catch (err: unknown) {
+      setError("Failed to send MFA code: " + (err as Error).message);
     }
   }
 
   const handleVerifyMfa = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoading(true);
     try {
       const cred = PhoneAuthProvider.credential(verificationId, code);
       const multiFactorAssertion = PhoneMultiFactorGenerator.assertion(cred);
-      await mfaResolver.resolveSignIn(multiFactorAssertion);
+      const result = await mfaResolver!.resolveSignIn(multiFactorAssertion);
+      
+      // Log login event
+      try {
+        const idToken = await result.user.getIdToken();
+        await fetch('/api/auth/log-event', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+          body: JSON.stringify({ action: 'login' })
+        });
+      } catch (err) {
+        console.error("Failed to log login event:", err);
+      }
+
       document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-      router.push("/dashboard");
-    } catch (error: unknown) {
-      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      setError(err.message);
+      window.location.href = "/dashboard";
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
     }
   }
 
-  const handleSocialLogin = async (provider: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-    setError("");
-    try {
-      const result = await signInWithPopup(auth, provider);
-
-      // Check for user existence logic remains same... 
-      // Simplified here for brevity as we focus on MFA which might also trigger on Social Login if enabled.
-      const user = result.user;
-      const userDoc = await getDoc(doc(db, "users", user.uid));
-      if (!userDoc.exists()) {
+  const validateUserStatusAndLogin = async (user: import("firebase/auth").User) => {
+    const userDoc = await getDoc(doc(db, "users", user.uid));
+    
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      if (
+        userData.is_active === false || 
+        userData.portal_access === false || 
+        userData.is_locked === true || 
+        userData.is_deleted === true
+      ) {
+        await auth.signOut();
+        throw new Error("Access Denied: Your account is locked or portal access is disabled. Please contact your administrator.");
+      }
+    } else {
+      // If user does not exist in directory, only Avenir IT Process manager email is allowed to auto-seed CEO
+      if (user.email === "avenir.itprocess@gmail.com") {
+        const { setDoc } = await import("firebase/firestore");
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
+          name: user.displayName || "Avenir IT Process",
           email: user.email,
-          name: user.displayName || "",
-          photoURL: user.photoURL || "",
-          role: "employee",
-          provider: provider.providerId,
-          createdAt: new Date().toISOString(),
+          role: "ceo",
+          is_active: true,
+          portal_access: true,
+          is_locked: false,
+          is_deleted: false,
+          created_at: new Date(),
+          updated_at: new Date()
         });
-      }
-      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-      router.push("/dashboard");
-    } catch (error: unknown) {
-      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      if (err.code === "auth/multi-factor-auth-required") {
-        setShowMfa(true);
-        setMfaResolver(getMultiFactorResolver(auth, err));
-        initMfa(getMultiFactorResolver(auth, err));
       } else {
-        setError(err.message);
+        await auth.signOut();
+        throw new Error("Access Denied: Your email is not registered in the company directory. Please contact your administrator.");
       }
+    }
+
+    // Set Avenir IT Process email back to CEO role if altered
+    if (user.email === "avenir.itprocess@gmail.com" && userDoc.exists() && userDoc.data().role !== "ceo") {
+      const { updateDoc } = await import("firebase/firestore");
+      await updateDoc(doc(db, "users", user.uid), { role: "ceo", is_active: true, portal_access: true });
+    }
+
+    // Log login event
+    try {
+      const idToken = await user.getIdToken();
+      await fetch('/api/auth/log-event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
+        body: JSON.stringify({ action: 'login' })
+      });
+    } catch (err) {
+      console.error("Failed to log login event:", err);
+    }
+
+    document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
+    window.location.href = "/dashboard";
+  };
+
+  const handleEmailLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    setLoading(true);
+    try {
+      const result = await signInWithEmailAndPassword(auth, email, password);
+      await validateUserStatusAndLogin(result.user);
+    } catch (err: unknown) {
+      const errorObj = err as Error & { code?: string };
+      if (errorObj.code === "auth/multi-factor-auth-required") {
+        setShowMfa(true);
+        const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
+        setMfaResolver(resolver);
+        initMfa(resolver);
+      } else {
+        setError(errorObj.message);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSocialLogin = async (provider: import("firebase/auth").AuthProvider) => {
+    setError("");
+    setLoading(true);
+    try {
+      const result = await signInWithPopup(auth, provider);
+      await validateUserStatusAndLogin(result.user);
+    } catch (err: unknown) {
+      const errorObj = err as Error & { code?: string };
+      if (errorObj.code === "auth/multi-factor-auth-required") {
+        setShowMfa(true);
+        const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
+        setMfaResolver(resolver);
+        initMfa(resolver);
+      } else {
+        setError(errorObj.message);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
   if (showMfa) {
     return (
-      <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12 max-w-md mx-auto mt-10">
-        <h2 className="text-2xl font-bold text-center mb-6">Two-Factor Authentication</h2>
-        <p className="text-sm text-gray-500 text-center mb-6">Enter the code sent to your phone.</p>
+      <div className="bg-white dark:bg-slate-900 px-8 py-10 shadow-2xl shadow-slate-100 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl max-w-md mx-auto animate-slide-up">
+        <div className="text-center space-y-4 mb-6 animate-fade-in">
+          <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 uppercase tracking-wider">Two-Factor Authentication</h2>
+          <p className="text-xs text-slate-500">Enter the security verification code sent to your phone hint.</p>
+        </div>
 
         <div ref={recaptchaContainerRef}></div>
 
-        <form onSubmit={handleVerifyMfa} className="space-y-6">
-          <input
-            type="text"
-            placeholder="Enter verification code"
-            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm px-3 py-2 border"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
+        <form onSubmit={handleVerifyMfa} className="space-y-4">
+          <div>
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Verification Code</label>
+            <input
+              type="text"
+              placeholder="e.g. 123456"
+              className="block w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none font-medium text-slate-900 dark:text-white transition-all"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              required
+            />
+          </div>
           <button
             type="submit"
-            className="flex w-full justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
+            disabled={loading}
+            className="flex w-full justify-center rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/10"
           >
-            Verify
+            {loading ? "Verifying..." : "Verify Identity"}
           </button>
-          {error && <div className="text-red-500 text-sm">{error}</div>}
+          {error && <div className="text-red-500 text-xs font-bold text-center mt-2">{error}</div>}
         </form>
       </div>
     );
   }
 
   return (
-    <div className="bg-white px-6 py-12 shadow sm:rounded-lg sm:px-12">
+    <div className="bg-white dark:bg-slate-900 px-8 py-10 shadow-2xl shadow-slate-100 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl max-w-md mx-auto animate-slide-up">
       <div id="recaptcha-container" ref={recaptchaContainerRef}></div>
-      <div className="mb-6 text-center">
-        <h2 className="text-3xl font-bold tracking-tight text-gray-900">
-          Log in
-        </h2>
-        <p className="mt-2 text-sm text-gray-600">
-          Professional Portal Access Only
-        </p>
+      <div className="mb-8 text-center space-y-4 animate-fade-in">
+        <div>
+          <h1 className="text-sm font-extrabold tracking-[0.18em] text-slate-800 dark:text-slate-100 uppercase">
+            Avenir Tech Venture Pvt. Ltd.
+          </h1>
+          <p className="mt-2 text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase tracking-wider leading-relaxed">
+            Empowering People. Simplifying Workforce Management.
+          </p>
+        </div>
       </div>
 
-      <div className="space-y-6">
+      {error && (
+        <div className="mb-4 p-3.5 bg-rose-50 border border-rose-100 text-rose-600 dark:bg-rose-950/20 dark:border-rose-900/50 dark:text-rose-450 rounded-xl text-xs font-bold text-center leading-relaxed">
+          {error}
+        </div>
+      )}
+
+      <form onSubmit={handleEmailLogin} className="space-y-4">
         <div>
-          <div className="grid grid-cols-1 gap-3">
-            <button
-              onClick={() => handleSocialLogin(googleProvider)}
-              className="flex w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            >
-              Google
-            </button>
-          </div>
-          <div className="relative mt-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-300" />
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="bg-white px-2 text-gray-500">
-                Or continue with
-              </span>
-            </div>
-          </div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Email Address</label>
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="block w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none font-medium text-slate-900 dark:text-white transition-all"
+            placeholder="you@company.com"
+            required
+          />
         </div>
 
-        <form className="space-y-6" onSubmit={handleLogin}>
-          <div>
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-gray-700"
-            >
-              Email address
-            </label>
-            <div className="mt-1">
-              <input
-                id="email"
-                name="email"
-                type="email"
-                required
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm px-3 py-2 border"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-          </div>
+        <div>
+          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 ml-1">Password</label>
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="block w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 px-4 py-3 text-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none font-medium text-slate-900 dark:text-white transition-all"
+            placeholder="••••••••"
+            required
+          />
+        </div>
 
-          <div>
-            <div className="flex justify-between items-center">
-              <label
-                htmlFor="password"
-                className="block text-sm font-medium text-gray-700"
-              >
-                Password
-              </label>
-              <Link
-                href="/forgot-password"
-                className="text-sm font-medium text-primary hover:text-primary-hover"
-              >
-                Forgot password?
-              </Link>
-            </div>
-            <div className="mt-1">
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-primary focus:ring-primary sm:text-sm px-3 py-2 border"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
+        <button
+          type="submit"
+          disabled={loading}
+          className="flex w-full justify-center rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white py-3.5 text-xs font-black uppercase tracking-widest transition-all disabled:opacity-50 shadow-lg shadow-indigo-600/10"
+        >
+          {loading ? "Signing In..." : "Log In with Credentials"}
+        </button>
+      </form>
 
-          {error && <div className="text-red-500 text-sm">{error}</div>}
+      <div className="relative my-6">
+        <div className="absolute inset-0 flex items-center" aria-hidden="true">
+          <div className="w-full border-t border-slate-100 dark:border-slate-800"></div>
+        </div>
+        <div className="relative flex justify-center text-[10px] font-bold uppercase tracking-wider">
+          <span className="bg-white dark:bg-slate-900 px-3 text-slate-400 dark:text-slate-500">Or Continue With</span>
+        </div>
+      </div>
 
-          <div>
-            <button
-              type="submit"
-              className="flex w-full justify-center rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm hover:bg-primary-hover focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-            >
-              Log in
-            </button>
-          </div>
-        </form>
+      <div>
+        <button
+          onClick={() => handleSocialLogin(googleProvider)}
+          disabled={loading}
+          className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 py-3.5 text-xs font-bold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50 active:scale-[0.99]"
+        >
+          <svg className="h-4 w-4" viewBox="0 0 24 24">
+            <path
+              fill="currentColor"
+              d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+            />
+            <path
+              fill="currentColor"
+              d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+            />
+            <path
+              fill="currentColor"
+              d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+            />
+            <path
+              fill="currentColor"
+              d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.53 12-4.53z"
+            />
+          </svg>
+          Google Identity SSO
+        </button>
       </div>
     </div>
   );

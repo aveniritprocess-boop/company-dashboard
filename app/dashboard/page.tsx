@@ -7,6 +7,7 @@ import { DashboardShortcuts } from "@/components/DashboardShortcuts";
 import { DashboardAttendanceWidget } from "@/components/DashboardAttendanceWidget";
 import { RecentActivity } from "@/components/RecentActivity";
 import { TaskAnalyticsWidget } from "@/components/tasks/TaskAnalyticsWidget";
+import { RecentTaskSummary } from "@/components/tasks/RecentTaskSummary";
 import { DashboardSearch } from "@/components/DashboardSearch";
 import { TodayTasksWidget } from "@/components/TodayTasksWidget";
 import { DayReportWidget } from "@/components/DayReportWidget";
@@ -25,29 +26,37 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8 max-w-7xl mx-auto">
             {/* Welcome Banner */}
-            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-8 py-10 shadow-2xl border border-slate-800 sm:px-12 sm:py-16 group">
-                <div className="relative z-10">
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 px-4 py-3 shadow-md border border-slate-800 sm:px-5 sm:py-4 group">
+                <div className="relative z-10 flex items-center justify-between">
                     <div className="max-w-xl">
-                        <div className="flex items-center gap-2 text-indigo-400 mb-4 animate-pulse">
-                            <Sparkles className="h-5 w-5 fill-indigo-400/20" />
-                            <span className="text-xs font-bold uppercase tracking-[0.2em]">Platform Overview</span>
+                        <div className="flex items-center gap-1.5 text-indigo-400 mb-1 animate-pulse">
+                            <Sparkles className="h-3 w-3 fill-indigo-400/20" />
+                            <span className="text-[9px] font-bold uppercase tracking-[0.15em]">Platform Overview</span>
                         </div>
-                        <h1 className="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl text-balance">
+                        <h1 className="text-base font-medium tracking-tight text-white sm:text-lg lg:text-xl text-balance">
                             {getGreeting()}, <span className="bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-sky-400">{user?.displayName?.split(" ")[0] || "User"}</span>!
                         </h1>
-                        <p className="mt-6 text-lg text-slate-400 max-w-lg leading-relaxed">
+                        <p className="mt-1 text-xs text-slate-400 max-w-lg leading-snug">
                             Welcome back to your command center. Everything you need to manage your projects and team is right here.
                         </p>
                     </div>
                 </div>
 
                 {/* Abstract Decorative Elements */}
-                <div className="absolute top-0 right-0 -mr-20 -mt-20 h-96 w-96 rounded-full bg-indigo-500/10 blur-[120px] group-hover:bg-indigo-500/20 transition-colors duration-1000" />
-                <div className="absolute bottom-0 right-20 -mb-20 h-80 w-80 rounded-full bg-sky-500/10 blur-[100px] group-hover:bg-sky-500/20 transition-colors duration-1000" />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full w-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.03] pointer-events-none" />
+                <div className="absolute top-0 right-0 -mr-5 -mt-5 h-20 w-20 rounded-full bg-indigo-500/10 blur-[30px] group-hover:bg-indigo-500/20 transition-colors duration-1000" />
+                <div className="absolute bottom-0 right-5 -mb-5 h-16 w-16 rounded-full bg-sky-500/10 blur-[20px] group-hover:bg-sky-500/20 transition-colors duration-1000" />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-full w-full bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-[0.02] pointer-events-none" />
             </div>
 
             <DashboardSearch />
+
+            <div className="mb-8">
+                <QuickTaskWidget />
+            </div>
+
+            <div className="mb-8">
+                <RecentTaskSummary showDiary={true} timeWindowDays={2} />
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 {/* Left Column: Stats & Shortcuts */}

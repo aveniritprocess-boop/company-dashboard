@@ -1,25 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
+import { verifyFirebaseToken } from '@/lib/auth-middleware';
 
 export async function POST(request: NextRequest) {
     try {
-        // 1. Verify that the requester is an Admin
-        // For simplicity in this demo, we'll check the Authorization header for a token
-        // In a real app, you'd verify the ID token and check the 'admin' role in custom claims or Firestore
-        const authHeader = request.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ')) {
-            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        // 1. Verify token and authorize CEO/Admin/HR role
+        const user = await verifyFirebaseToken(request);
+        if ('error' in user) {
+            return NextResponse.json({ error: user.error }, { status: user.status });
         }
 
-        const idToken = authHeader.split('Bearer ')[1];
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-
-        // Check if user is admin in Firestore
-        const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
-        const userData = userDoc.data();
-
-        if (userData?.role !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden: Admin access only' }, { status: 403 });
+        if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
+            return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can create employees' }, { status: 403 });
         }
 
         // 2. Parse common employee data
@@ -34,11 +26,53 @@ export async function POST(request: NextRequest) {
             department,
             location,
             location_id,
-            employee_id
+            employee_id,
+            is_active,
+            portal_access,
+            is_locked,
+            designation,
+            joining_date,
+            employee_type,
+            address,
+            emergency_contact,
+            profile_photo,
+            gender,
+            status
         } = body;
 
+        // Security role restriction: only CEO can create/assign 'ceo' or 'admin' roles
+        if ((role?.toLowerCase() === 'ceo' || role?.toLowerCase() === 'admin') && user.role.toLowerCase() !== 'ceo') {
+            return NextResponse.json({ error: 'Forbidden: Only the CEO can create Admin or CEO accounts' }, { status: 403 });
+        }
+
         if (!email || !password || !name) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+            return NextResponse.json({ error: 'Missing required fields: email, password, name' }, { status: 400 });
+        }
+
+        // Check duplicate email
+        try {
+            const existingUser = await adminAuth.getUserByEmail(email);
+            if (existingUser) {
+                return NextResponse.json({ error: 'Duplicate Email: A user account already exists with this email.' }, { status: 400 });
+            }
+        } catch (authErr: unknown) {
+            const err = authErr as { code?: string };
+            if (err.code !== 'auth/user-not-found') {
+                console.error("Auth check error:", authErr);
+            }
+        }
+
+        const dupSnap = await adminDb.collection('users').where('email', '==', email).limit(1).get();
+        if (!dupSnap.empty) {
+            return NextResponse.json({ error: 'Duplicate Email: An employee record already exists with this email.' }, { status: 400 });
+        }
+
+        // Verify duplicate employee ID (especially for manual override)
+        if (employee_id) {
+            const idSnap = await adminDb.collection('users').where('employee_id', '==', employee_id).limit(1).get();
+            if (!idSnap.empty) {
+                return NextResponse.json({ error: `Duplicate Employee ID: An employee record already exists with ID "${employee_id}".` }, { status: 400 });
+            }
         }
 
         // 3. Create user in Firebase Auth
@@ -60,10 +94,36 @@ export async function POST(request: NextRequest) {
             location: location || "",
             location_id: location_id || "",
             employee_id: employee_id || "",
-            is_active: true,
+            is_active: is_active !== undefined ? is_active : true,
+            portal_access: portal_access !== undefined ? portal_access : true,
+            is_locked: is_locked !== undefined ? is_locked : false,
+            is_deleted: false,
             must_change_password: true, // Force password change on first login
+            designation: designation || "",
+            joining_date: joining_date || new Date().toISOString().split('T')[0],
+            employee_type: employee_type || "permanent",
+            address: address || "",
+            emergency_contact: emergency_contact || { name: "", relationship: "", mobile: "" },
+            profile_photo: profile_photo || "",
+            gender: gender || "prefer-not-to-say",
+            status: status || "active",
             created_at: new Date(),
             updated_at: new Date(),
+        });
+
+        // 5. Create Audit Log
+        await adminDb.collection('audit_logs').add({
+            operator_id: user.uid,
+            operator_name: user.name || user.email || 'Admin',
+            action: 'create',
+            target_id: userRecord.uid,
+            target_name: name,
+            details: `Onboarded employee ${name} (${employee_id || 'N/A'}) in department: ${department || 'N/A'}, designation: ${designation || 'N/A'}, role: ${role || 'employee'}.`,
+            ip: user.ip,
+            browser: user.browser,
+            device: user.device,
+            userAgent: user.userAgent,
+            timestamp: new Date()
         });
 
         return NextResponse.json({
@@ -73,7 +133,7 @@ export async function POST(request: NextRequest) {
         });
 
     } catch (err: unknown) {
-        const error = err as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+        const error = err as Error;
         console.error('Error creating employee:', error);
         return NextResponse.json({
             error: error.message || 'Internal server error'

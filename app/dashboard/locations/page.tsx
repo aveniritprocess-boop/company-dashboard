@@ -18,6 +18,7 @@ export default function LocationsPage() {
     const [state, setState] = useState("");
     const [status, setStatus] = useState<"active" | "inactive">("active");
     const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState("");
 
     useEffect(() => {
         if (role !== "admin" && role !== "ceo") return;
@@ -50,16 +51,17 @@ export default function LocationsPage() {
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         setSubmitting(true);
+        setError("");
         try {
             if (editingId) {
-                await updateLocation(editingId, { name, code, state, status });
+                await updateLocation(editingId, { name: name.trim(), code: code.trim(), state: state.trim(), status });
             } else {
-                await createLocation(name, code, state, status);
+                await createLocation(name.trim(), code.trim(), state.trim(), status);
             }
             setShowModal(false);
-        } catch (error) {
-            console.error("Error saving location:", error);
-            alert("Failed to save location.");
+        } catch (err: unknown) {
+            console.error("Error saving location:", err);
+            setError("Failed to save location.");
         } finally {
             setSubmitting(false);
         }
@@ -67,20 +69,22 @@ export default function LocationsPage() {
 
     const handleDelete = async (id: string) => {
         if (!confirm("Are you sure you want to delete this location? It might affect assigned employees.")) return;
+        setError("");
         try {
             await deleteLocation(id);
-        } catch (error) {
-            console.error("Error deleting location:", error);
-            alert("Failed to delete location.");
+        } catch (err: unknown) {
+            console.error("Error deleting location:", err);
+            setError("Failed to delete location.");
         }
     };
 
     const handleToggleStatus = async (loc: Location) => {
+        setError("");
         try {
             await updateLocation(loc.id, { status: loc.status === "active" ? "inactive" : "active" });
-        } catch (error) {
-            console.error("Error updating status:", error);
-            alert("Failed to update status.");
+        } catch (err: unknown) {
+            console.error("Error updating status:", err);
+            setError("Failed to update status.");
         }
     };
 
@@ -110,7 +114,7 @@ export default function LocationsPage() {
                     <p className="text-sm text-slate-500 mt-1">Manage all company branches and offices.</p>
                 </div>
 
-                {role === "admin" && (
+                {(role === "admin" || role === "ceo") && (
                     <button
                         onClick={() => handleOpenModal()}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-md shadow-indigo-500/20"
@@ -120,6 +124,12 @@ export default function LocationsPage() {
                     </button>
                 )}
             </div>
+ 
+            {error && (
+                <div className="p-3.5 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 text-xs font-semibold rounded-xl border border-red-200 dark:border-red-900/30">
+                    {error}
+                </div>
+            )}
 
             <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden shadow-sm">
                 <div className="overflow-x-auto">
@@ -130,7 +140,7 @@ export default function LocationsPage() {
                                 <th className="px-6 py-4 font-semibold">Code</th>
                                 <th className="px-6 py-4 font-semibold">State</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
-                                {role === "admin" && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
+                                {(role === "admin" || role === "ceo") && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -157,17 +167,17 @@ export default function LocationsPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <button
-                                                onClick={() => role === "admin" && handleToggleStatus(loc)}
-                                                disabled={role !== "admin"}
+                                                onClick={() => (role === "admin" || role === "ceo") && handleToggleStatus(loc)}
+                                                disabled={role !== "admin" && role !== "ceo"}
                                                 className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize border transition-colors ${loc.status === 'active'
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
                                                         : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                                                    } ${role === "admin" ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                                                    } ${role === "admin" || role === "ceo" ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
                                             >
                                                 {loc.status}
                                             </button>
                                         </td>
-                                        {role === "admin" && (
+                                        {(role === "admin" || role === "ceo") && (
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button

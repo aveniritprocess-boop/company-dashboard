@@ -2,7 +2,6 @@
 
 import { LogOut, User as UserIcon } from "lucide-react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
 import { signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
 import { useAuth } from "@/components/AuthProvider";
@@ -14,17 +13,16 @@ interface SidebarUserProps {
 
 export function SidebarUser({ isCollapsed }: SidebarUserProps) {
   const { user, role } = useAuth();
-  const router = useRouter();
 
   const handleSignOut = async () => {
     try {
       await signOut(auth);
       document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
-      router.push("/login");
+      window.location.href = "/login";
     } catch (error) {
       console.error("Error signing out", error);
       // Fallback redirect
-      router.push("/login");
+      window.location.href = "/login";
     }
   };
 

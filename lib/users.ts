@@ -14,8 +14,28 @@ export interface AppUserSummary {
     employee_id?: string;
     is_active?: boolean;
     must_change_password?: boolean;
+    designation?: string;
+    joining_date?: string;
+    employee_type?: string;
+    address?: string;
+    emergency_contact?: {
+        name: string;
+        relationship: string;
+        mobile: string;
+    };
+    profile_photo?: string;
+    gender?: "male" | "female" | "non-binary" | "prefer-not-to-say";
+    status?: "active" | "inactive" | "notice_period" | "archived";
+    exit_details?: {
+        exit_date: string;
+        exit_type: "resigned" | "terminated" | "retired" | "contract_ended";
+        reason: string;
+    };
     created_at?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
     updated_at?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    portal_access?: boolean;
+    is_locked?: boolean;
+    is_deleted?: boolean;
 }
 
 export async function getAllUsers(): Promise<AppUserSummary[]> {
@@ -34,11 +54,24 @@ export async function getAllUsers(): Promise<AppUserSummary[]> {
             employee_id: data.employee_id,
             is_active: data.is_active ?? true,
             must_change_password: data.must_change_password ?? false,
+            designation: data.designation,
+            joining_date: data.joining_date,
+            employee_type: data.employee_type,
+            address: data.address,
+            emergency_contact: data.emergency_contact,
+            profile_photo: data.profile_photo,
+            gender: data.gender || "prefer-not-to-say",
+            status: data.status || (data.is_active === false ? "inactive" : "active"),
+            exit_details: data.exit_details,
             created_at: data.created_at || data.createdAt,
             updated_at: data.updated_at || data.updatedAt,
+            portal_access: data.portal_access ?? true,
+            is_locked: data.is_locked ?? false,
+            is_deleted: data.is_deleted ?? false,
         };
     });
 }
+
 export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void): () => void {
   const collectionRef = collection(db, "users");
   return onSnapshot(collectionRef, (snapshot) => {
@@ -56,8 +89,20 @@ export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void)
         employee_id: data.employee_id,
         is_active: data.is_active ?? true,
         must_change_password: data.must_change_password ?? false,
+        designation: data.designation,
+        joining_date: data.joining_date,
+        employee_type: data.employee_type,
+        address: data.address,
+        emergency_contact: data.emergency_contact,
+        profile_photo: data.profile_photo,
+        gender: data.gender || "prefer-not-to-say",
+        status: data.status || (data.is_active === false ? "inactive" : "active"),
+        exit_details: data.exit_details,
         created_at: data.created_at || data.createdAt,
         updated_at: data.updated_at || data.updatedAt,
+        portal_access: data.portal_access ?? true,
+        is_locked: data.is_locked ?? false,
+        is_deleted: data.is_deleted ?? false,
       };
     });
     callback(users);

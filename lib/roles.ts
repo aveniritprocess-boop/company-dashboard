@@ -1,4 +1,4 @@
-export type UserRole = "ceo" | "admin" | "manager" | "employee";
+export type UserRole = "ceo" | "admin" | "manager" | "hr" | "team_lead" | "employee";
 
 export interface AppUser {
   uid: string;
@@ -50,11 +50,16 @@ export interface Invite {
 
 export const PERMISSIONS = {
   ceo: {
+    canManageUsers: true,
+    canManageTeams: true,
+    canManageProjects: true,
     canViewAllTasks: true,
     canEditSirTasks: true,
     canAssignTasks: true,
     canUpdateTaskStatus: true,
     canViewAllEmployees: true,
+    canDeleteTasks: true,
+    canManageRoles: true,
     canBeDeleted: false,
   },
   admin: {
@@ -79,6 +84,29 @@ export const PERMISSIONS = {
     canUpdateTaskStatus: true,
     canDeleteTasks: false,
     canAccessAdminSettings: false,
+  },
+  hr: {
+    canManageUsers: true,
+    canManageTeams: false,
+    canManageProjects: false,
+    canViewAllTasks: false,
+    canEditSirTasks: false,
+    canAssignTasks: false,
+    canUpdateTaskStatus: true,
+    canViewAllEmployees: true,
+    canDeleteTasks: false,
+    canManageRoles: false,
+  },
+  team_lead: {
+    canManageUsers: false,
+    canManageTeams: false,
+    canManageProjects: false,
+    canViewAllTasks: false,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
+    canViewAllEmployees: true,
+    canDeleteTasks: false,
+    canManageRoles: false,
   },
   employee: {
     canManageUsers: false,

@@ -1,0 +1,4 @@
+﻿components/RecentActivity.tsx(25,39): error TS2339: Property 'toDate' does not exist on type 'Timestamp | FieldValue'.
+  Property 'toDate' does not exist on type 'FieldValue'.
+components/RecentActivity.tsx(25,63): error TS2339: Property 'toDate' does not exist on type 'Timestamp | FieldValue'.
+  Property 'toDate' does not exist on type 'FieldValue'.

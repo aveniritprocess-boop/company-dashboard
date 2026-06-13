@@ -1,0 +1,95 @@
+﻿
+> personal-dashboard-temp@0.1.0 lint
+> eslint
+
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\task-given-by-sir\page.tsx
+  15:5  warning  'Calendar' is defined but never used      @typescript-eslint/no-unused-vars
+  16:5  warning  'CheckCircle2' is defined but never used  @typescript-eslint/no-unused-vars
+  17:5  warning  'Clock' is defined but never used         @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\your-tasks\page.tsx
+   5:32  warning  'updateTaskStatus' is defined but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       @typescript-eslint/no-unused-vars
+  27:9   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\your-tasks\page.tsx:27:9
+  25 |     useEffect(() => {
+  26 |         if (!user) return;
+> 27 |         setLoading(true);
+     |         ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  28 |         const unsub = subscribeToUserTasks(user.uid, (data, last) => {
+  29 |             setTasks(data);
+  30 |             setLastDoc(last);  react-hooks/set-state-in-effect
+  53:11  warning  'showToast' is assigned a value but never used                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\DashboardSearch.tsx
+  4:18  warning  'Command' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\DashboardShortcuts.tsx
+  6:3  warning  'ListChecks' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\NotificationDropdown.tsx
+    4:16  warning  'Check' is defined but never used                                @typescript-eslint/no-unused-vars
+    4:23  warning  'Trash2' is defined but never used                               @typescript-eslint/no-unused-vars
+    4:72  warning  'Info' is defined but never used                                 @typescript-eslint/no-unused-vars
+  110:86  error    `'` can be escaped with `&apos;`, `&lsquo;`, `&#39;`, `&rsquo;`  react/no-unescaped-entities
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\SearchDialog.tsx
+   68:7   error    Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\SearchDialog.tsx:68:7
+  66 |   useEffect(() => {
+  67 |     if (!query) {
+> 68 |       setResults([]);
+     |       ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  69 |       return;
+  70 |     }
+  71 |  react-hooks/set-state-in-effect
+  148:6   warning  React Hook useEffect has a missing dependency: 'pages'. Either include it or remove the dependency array                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       react-hooks/exhaustive-deps
+  200:63  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react/no-unescaped-entities
+  200:71  error    `"` can be escaped with `&quot;`, `&ldquo;`, `&#34;`, `&rdquo;`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                react/no-unescaped-entities
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\tasks\EnhancedTaskCard.tsx
+  47:6  warning  React Hook useEffect has a missing dependency: 'comments.length'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\tasks\TaskAnalyticsWidget.tsx
+   43:5   error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\tasks\TaskAnalyticsWidget.tsx:43:5
+  41 |
+  42 |     let unsub: () => void;
+> 43 |     setLoading(true);
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  44 |     
+  45 |     if (role === "admin" || role === "ceo" || role === "manager") {
+  46 |       unsub = subscribeToAllTasks((data, last) => {  react-hooks/set-state-in-effect
+  134:16  error  Unexpected any. Specify a different type                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\attendance.ts
+  13:3   warning  'getDoc' is defined but never used              @typescript-eslint/no-unused-vars
+  16:10  warning  'createNotification' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\tasks.ts
+  106:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 23 problems (9 errors, 14 warnings)
+

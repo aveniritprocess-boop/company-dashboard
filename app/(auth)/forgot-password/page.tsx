@@ -20,9 +20,9 @@ export default function ForgotPasswordPage() {
       await sendPasswordResetEmail(auth, email);
       setStatus("sent");
     } catch (error: unknown) {
-      const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
-      console.error(err);
+      console.error(error);
       setStatus("error");
+      const err = error as Error & { code?: string };
       if (err.code === "auth/user-not-found") {
         setError("No account found with this email.");
       } else {

@@ -9,11 +9,10 @@ import {
   serverTimestamp,
   Timestamp,
   doc,
-  updateDoc,
-  getDoc
+  updateDoc
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { createNotification, broadcastNotification } from "./notifications";
+import { broadcastNotification } from "./notifications";
 
 export interface AttendanceSession {
   id: string;

@@ -21,7 +21,8 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!loading && !user) {
-      router.push("/login");
+      document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
+      window.location.href = "/login";
       return;
     }
 

@@ -27,7 +27,6 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   const [users, setUsers] = useState<AppUserSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
-  const [results, setResults] = useState<SearchItem[]>([]);
 
   useEffect(() => {
     if (!user || !isOpen) return;
@@ -59,36 +58,19 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   ];
 
   if (role === "admin" || role === "ceo" || role === "manager") {
-    pages.push({ id: "p5", title: "Task Given By Sir", category: "Page", link: "/dashboard/task-given-by-sir", icon: <Users className="h-4 w-4" /> });
+    pages.push({ id: "p5", title: "Task Assigned", category: "Page", link: "/dashboard/tasks-assigned", icon: <Users className="h-4 w-4" /> });
     pages.push({ id: "p6", title: "Employee Management", category: "Page", link: "/dashboard/employees", icon: <Users className="h-4 w-4" /> });
   }
 
-  useEffect(() => {
-    if (!query) {
-      setResults([]);
-      return;
-    }
-
-    const q = query.toLowerCase();
-    
-    const filteredPages = pages.filter(p => p.title.toLowerCase().includes(q));
-    
-    const filteredTasks = tasks
-      .filter(t => (t.taskText || t.title || "").toLowerCase().includes(q))
-      .map(t => ({
-        id: t.id,
-        title: t.taskText || t.title || "Untitled Task",
-        description: `Status: ${t.status}`,
-        category: "Task" as const,
-        link: "/dashboard/your-tasks",
-        icon: <FileText className="h-4 w-4" />
-      }));
-
-    const filteredUsers = users
+  const results = [
+    ...pages.filter(p => !query || p.title.toLowerCase().includes(query.toLowerCase())),
+    ...users
       .filter(u => 
-        (u.name || "").toLowerCase().includes(q) || 
-        (u.email || "").toLowerCase().includes(q) ||
-        (u.employee_id || "").toLowerCase().includes(q)
+        query && (
+          (u.name || "").toLowerCase().includes(query.toLowerCase()) || 
+          (u.email || "").toLowerCase().includes(query.toLowerCase()) ||
+          (u.employee_id || "").toLowerCase().includes(query.toLowerCase())
+        )
       )
       .map(u => ({
         id: u.uid,
@@ -101,10 +83,9 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
             {u.name?.charAt(0) || "U"}
           </div>
         )
-      }));
-
-    const attendanceMatches: SearchItem[] = users
-      .filter(u => (u.name || "").toLowerCase().includes(q))
+      })),
+    ...users
+      .filter(u => query && (u.name || "").toLowerCase().includes(query.toLowerCase()))
       .map(u => ({
         id: `att-${u.uid}`,
         title: `${u.name}'s Attendance`,
@@ -112,40 +93,38 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
         category: "Attendance" as const,
         link: "/dashboard/attendance",
         icon: <Calendar className="h-4 w-4" />
-      }));
-
-    const filteredProjects = projects
-      .filter(p => (p.name || "").toLowerCase().includes(q) || (p.description || "").toLowerCase().includes(q))
-      .map(p => ({
-        id: p.id || Math.random().toString(),
+      })),
+    ...projects
+      .filter(p => query && ((p.name || "").toLowerCase().includes(query.toLowerCase()) || (p.description || "").toLowerCase().includes(query.toLowerCase())))
+      .map((p, idx) => ({
+        id: p.id || `p-fallback-${idx}`,
         title: p.name || "Untitled Project",
         description: p.description,
         category: "Project" as const,
         link: "/dashboard/projects",
         icon: <LayoutDashboard className="h-4 w-4 text-sky-500" />
-      }));
-
-    const filteredTeams = teams
-      .filter(t => (t.name || "").toLowerCase().includes(q))
-      .map(t => ({
-        id: t.id || Math.random().toString(),
+      })),
+    ...teams
+      .filter(t => query && (t.name || "").toLowerCase().includes(query.toLowerCase()))
+      .map((t, idx) => ({
+        id: t.id || `t-fallback-${idx}`,
         title: t.name || "Untitled Team",
         description: `${t.members?.length || 0} Members`,
         category: "Team" as const,
         link: "/dashboard/teams",
         icon: <Users className="h-4 w-4 text-orange-500" />
-      }));
-
-    const allResults = [
-      ...filteredPages, 
-      ...filteredUsers, 
-      ...attendanceMatches, 
-      ...filteredProjects,
-      ...filteredTeams,
-      ...filteredTasks
-    ];
-    setResults(allResults.slice(0, 10)); // Top 10 most relevant
-  }, [query, tasks, users, projects, teams]);
+      })),
+    ...tasks
+      .filter(t => query && (t.taskText || t.title || "").toLowerCase().includes(query.toLowerCase()))
+      .map(t => ({
+        id: t.id,
+        title: t.taskText || t.title || "Untitled Task",
+        description: `Status: ${t.status}`,
+        category: "Task" as const,
+        link: "/dashboard/your-tasks",
+        icon: <FileText className="h-4 w-4" />
+      }))
+  ].slice(0, 10);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -197,7 +176,7 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
           {query && results.length === 0 && (
             <div className="p-12 text-center text-slate-500">
               <Search className="h-10 w-10 mx-auto mb-4 opacity-10" />
-              <p className="font-medium">No results found for "{query}"</p>
+              <p className="font-medium">No results found for &quot;{query}&quot;</p>
               <p className="text-sm mt-1 opacity-70">Try searching for something else.</p>
             </div>
           )}

@@ -40,7 +40,6 @@ export function TaskAnalyticsWidget() {
     if (!user || !role) return;
 
     let unsub: () => void;
-    setLoading(true);
     
     if (role === "admin" || role === "ceo" || role === "manager") {
       unsub = subscribeToAllTasks((data, last) => {
@@ -131,7 +130,7 @@ export function TaskAnalyticsWidget() {
   // 2. Employee Performance Bar Chart (Only for Managers/Admins/CEO)
   const showEmployeeStats = (role === "admin" || role === "ceo" || role === "manager") && employees.length > 0;
   
-  let barData: any[] = [];
+  let barData: { name: string; completed: number; active: number; }[] = [];
   if (showEmployeeStats) {
     const employeeMap = new Map<string, { name: string, completed: number, active: number }>();
     

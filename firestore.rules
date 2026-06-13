@@ -19,25 +19,30 @@ service cloud.firestore {
     }
     
     function isAdmin() {
-      return hasRole('admin');
+      return hasRole('admin') || hasRole('super_admin');
     }
     
     function isManager() {
       return hasRole('manager');
     }
 
+    function isHR() {
+      return hasRole('hr') || hasRole('hr_admin') || hasRole('hr_executive');
+    }
+
     // Users collection
     match /users/{userId} {
-      // Any signed-in user can read their own doc.
-      // Admins, CEOs, and Managers can read all user docs.
-      allow read: if isSignedIn() && (
-        request.auth.uid == userId || 
-        isCEO() || isAdmin() || isManager()
+      // Any signed-in user can read user documents (e.g. for directory visibility, task assignments, and reporting manager lookup)
+      allow read: if isSignedIn();
+      // Any signed-in user can CREATE their own document (defaults to employee or no role).
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        !request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'employee'
       );
-      // Any signed-in user can CREATE their own document (needed for first Google login).
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      // Users can update their own doc; Admins can update anyone's doc.
-      allow update: if isSignedIn() && (isAdmin() || isCEO() || request.auth.uid == userId);
+      // Users can update their own doc (except role); Admins/CEOs can update anyone's doc.
+      allow update: if isSignedIn() && (
+        isCEO() || isAdmin() || 
+        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+      );
       // Prevent deletion of CEO
       allow delete: if isAdmin() && resource.data.role != 'ceo';
     }
@@ -92,6 +97,37 @@ service cloud.firestore {
       );
       allow write: if isCEO() || isAdmin() || isManager();
     }
+
+    // Roles collection
+    match /roles/{roleId} {
+      allow read: if isSignedIn();
+      allow write: if isCEO() || isAdmin();
+    }
+
+    // Audit logs collection
+    match /audit_logs/{logId} {
+      allow read: if isSignedIn() && (isCEO() || isAdmin() || isHR());
+      allow create: if isSignedIn();
+      allow update, delete: if false;
+    }
+
+    // Change approval queue collection
+    match /change_approval_queue/{requestId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (isCEO() || isAdmin() || isHR());
+    }
+
+    // Leave requests collection
+    match /leave_requests/{requestId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+
+    // Performance reviews collection
+    match /performance_reviews/{reviewId} {
+      allow read: if isSignedIn() && (isCEO() || isAdmin() || isManager() || resource.data.userId == request.auth.uid);
+      allow write: if isCEO() || isAdmin() || isManager() || isHR();
+    }
     
     // Sales Leads
     match /salesLeads/{leadId} {
@@ -119,7 +155,7 @@ service cloud.firestore {
 
     // Default deny for everything else
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if isCEO();
     }
   }
 }

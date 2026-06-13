@@ -10,19 +10,36 @@ export function CreateTeamDialog({ onTeamCreated }: { onTeamCreated: () => void 
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
+  const [nameError, setNameError] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !name.trim()) return;
+    setNameError("");
+    setSubmitError("");
+
+    if (!name.trim()) {
+      setNameError("Team name is required.");
+      return;
+    }
+    if (name.trim().length < 3) {
+      setNameError("Team name must be at least 3 characters.");
+      return;
+    }
+    if (!user) {
+      setSubmitError("Authentication error. Please re-login.");
+      return;
+    }
 
     setLoading(true);
     try {
-      await createTeamWithIndex(name, user.uid, user.email || "");
+      await createTeamWithIndex(name.trim(), user.uid, user.email || "");
       setName("");
       setIsOpen(false);
       onTeamCreated();
     } catch (error) {
       console.error("Failed to create team", error);
+      setSubmitError("Failed to create team. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -51,6 +68,12 @@ export function CreateTeamDialog({ onTeamCreated }: { onTeamCreated: () => void 
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {submitError && (
+            <div className="p-3 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-450 text-xs font-semibold rounded-lg border border-red-100 dark:border-red-900/30">
+              {submitError}
+            </div>
+          )}
+
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Team Name</label>
             <input
@@ -61,6 +84,9 @@ export function CreateTeamDialog({ onTeamCreated }: { onTeamCreated: () => void 
               className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
               placeholder="e.g. Engineering"
             />
+            {nameError && (
+              <p className="mt-1 text-xs text-red-500 font-semibold">{nameError}</p>
+            )}
           </div>
 
           <div className="flex justify-end gap-2 pt-2">

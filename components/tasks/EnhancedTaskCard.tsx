@@ -9,7 +9,10 @@ import {
   reopenTask, 
   deleteTask, 
   addTaskComment, 
-  subscribeToTaskComments 
+  subscribeToTaskComments,
+  TaskHistoryItem,
+  subscribeToTaskHistory,
+  addTaskHistory
 } from "@/lib/tasks";
 import { 
   CheckCircle2, 
@@ -30,21 +33,33 @@ interface EnhancedTaskCardProps {
 
 export function EnhancedTaskCard({ task, currentUserId, currentUserRole, currentUserName }: EnhancedTaskCardProps) {
   const [comments, setComments] = useState<TaskComment[]>([]);
+  const [history, setHistory] = useState<TaskHistoryItem[]>([]);
   const [showComments, setShowComments] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    let unsub: () => void;
+    let unsubComments: () => void;
+    let unsubHistory: () => void;
+    
     if (showComments || comments.length === 0) {
-      unsub = subscribeToTaskComments(task.id, (fetchedComments) => {
+      unsubComments = subscribeToTaskComments(task.id, (fetchedComments) => {
         setComments(fetchedComments);
       });
     }
+    
+    if (showHistory || history.length === 0) {
+      unsubHistory = subscribeToTaskHistory(task.id, (fetchedHistory) => {
+        setHistory(fetchedHistory);
+      });
+    }
+
     return () => {
-      if (unsub) unsub();
+      if (unsubComments) unsubComments();
+      if (unsubHistory) unsubHistory();
     };
-  }, [task.id, showComments]);
+  }, [task.id, showComments, showHistory, comments.length, history.length]);
 
   const isAssignedToMe = Array.isArray(task.assignedTo) 
     ? task.assignedTo.includes(currentUserId) 
@@ -69,6 +84,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
     if (!canEdit) return;
     setLoading(true);
     await startTask(task.id);
+    await addTaskHistory(task.id, "Started the task", currentUserId, currentUserName || "User");
     setLoading(false);
   };
 
@@ -76,6 +92,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
     if (!canEdit) return;
     setLoading(true);
     await updateTaskProgress(task.id, 100, task.taskText || task.title, task.assignedBy);
+    await addTaskHistory(task.id, "Marked task as 100% completed", currentUserId, currentUserName || "User");
     setLoading(false);
   };
 
@@ -83,6 +100,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
     if (!canEdit) return;
     setLoading(true);
     await updateTaskProgress(task.id, val, task.taskText || task.title, task.assignedBy);
+    await addTaskHistory(task.id, `Updated progress to ${val}%`, currentUserId, currentUserName || "User");
     setLoading(false);
   };
 
@@ -90,6 +108,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
     if (!canEdit) return;
     setLoading(true);
     await reopenTask(task.id);
+    await addTaskHistory(task.id, "Reopened the task", currentUserId, currentUserName || "User");
     setLoading(false);
   };
 
@@ -120,7 +139,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
   };
 
   return (
-    <div className={`bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 transition-shadow ${loading ? 'opacity-60 pointer-events-none' : ''}`}>
+    <div className={`bg-white dark:bg-gray-800 p-5 rounded-2xl shadow-sm border transition-shadow ${loading ? 'opacity-60 pointer-events-none' : ''} ${isOverdue ? 'border-red-400 dark:border-red-500/50 shadow-red-500/10' : 'border-gray-200 dark:border-gray-700'}`}>
       <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
         
         <div className="flex-1 min-w-0">
@@ -130,7 +149,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
               : task.status === "in_progress" ? "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300"
               : "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
             }`}>
-              {task.status.replace("_", " ")}
+              {task.status === 'pending' ? 'Not Started' : task.status.replace("_", " ")}
             </span>
             {isOverdue && (
               <span className="text-xs px-2.5 py-1 rounded-full font-semibold bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 flex items-center gap-1">
@@ -149,14 +168,20 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
             </p>
           )}
 
-          <div className="grid grid-cols-2 gap-4 text-xs text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+          <div className="grid grid-cols-3 gap-2 text-xs text-gray-500 dark:text-gray-400 mb-4 bg-gray-50 dark:bg-gray-900/50 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
             <div>
-              <span className="font-medium text-gray-700 dark:text-gray-300">Start Date: </span>
+              <span className="font-medium text-gray-700 dark:text-gray-300 block mb-0.5">Start Date</span>
               {task.startDate ? new Date(task.startDate).toLocaleDateString() : "Not set"}
             </div>
             <div>
-              <span className="font-medium text-gray-700 dark:text-gray-300">Due Date: </span>
+              <span className="font-medium text-gray-700 dark:text-gray-300 block mb-0.5">Due Date</span>
               {task.dueDate ? new Date(task.dueDate).toLocaleDateString() : "Not set"}
+            </div>
+            <div>
+              <span className="font-medium text-gray-700 dark:text-gray-300 block mb-0.5">Priority</span>
+              <span className={`uppercase font-bold ${task.priority === 'high' ? 'text-red-500' : task.priority === 'low' ? 'text-gray-500' : 'text-blue-500'}`}>
+                {task.priority || "Medium"}
+              </span>
             </div>
           </div>
 
@@ -219,16 +244,26 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
         )}
       </div>
 
-      {/* Comments Section */}
-      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50">
+      {/* Footer Tabs */}
+      <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700/50 flex gap-6">
         <button 
-          onClick={() => setShowComments(!showComments)}
-          className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors font-medium"
+          onClick={() => { setShowComments(!showComments); setShowHistory(false); }}
+          className={`flex items-center gap-2 text-sm transition-colors font-medium ${showComments ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'}`}
         >
           <MessageSquare className="h-4 w-4" />
           {comments.length} Comments
         </button>
 
+        <button 
+          onClick={() => { setShowHistory(!showHistory); setShowComments(false); }}
+          className={`flex items-center gap-2 text-sm transition-colors font-medium ${showHistory ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200'}`}
+        >
+          <RotateCcw className="h-4 w-4" />
+          History
+        </button>
+      </div>
+
+      <div className="mt-4">
         {showComments && (
           <div className="mt-4 space-y-4">
             {comments.length > 0 ? (
@@ -268,6 +303,33 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
                   <Send className="h-4 w-4" />
                 </button>
               </form>
+            )}
+          </div>
+        )}
+
+        {showHistory && (
+          <div className="space-y-4">
+            {history.length > 0 ? (
+              <div className="space-y-4 max-h-64 overflow-y-auto pr-2 custom-scrollbar relative before:absolute before:inset-0 before:ml-2 before:-translate-x-px before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-gray-200 dark:before:via-gray-700 before:to-transparent">
+                {history.map(h => (
+                  <div key={h.id} className="relative flex items-start gap-3">
+                    <div className="mt-1.5 h-2 w-2 rounded-full bg-blue-500 ring-4 ring-white dark:ring-gray-800 shrink-0 relative z-10 ml-[3px]" />
+                    <div className="flex-1 bg-gray-50 dark:bg-gray-900/60 p-3 rounded-xl border border-gray-100 dark:border-gray-800">
+                      <div className="flex justify-between items-start mb-1">
+                        <span className="text-xs font-bold text-gray-900 dark:text-white">
+                          {h.performedByName || "User"}
+                        </span>
+                        <span className="text-[10px] text-gray-400">
+                          {h.createdAt && h.createdAt.toDate ? h.createdAt.toDate().toLocaleString() : "Just now"}
+                        </span>
+                      </div>
+                      <p className="text-sm text-gray-700 dark:text-gray-300">{h.message}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-xs text-gray-400 italic">No history tracked yet.</p>
             )}
           </div>
         )}

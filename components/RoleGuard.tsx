@@ -28,11 +28,11 @@ export function RoleGuard({
       let allowed = true;
       if (!role) {
         allowed = false;
-      } else if (allowedRoles && !allowedRoles.includes(role)) {
+      } else if (allowedRoles && !allowedRoles.includes(role as UserRole)) {
         allowed = false;
       } else if (permission) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rolePermissions = PERMISSIONS[role] as any;
+        const rolePermissions = (PERMISSIONS as any)[role];
         if (!rolePermissions || !rolePermissions[permission]) {
           allowed = false;
         }
@@ -48,14 +48,14 @@ export function RoleGuard({
   if (!role) return fallback;
 
   // Check if role is in allowed roles
-  if (allowedRoles && !allowedRoles.includes(role)) {
+  if (allowedRoles && !allowedRoles.includes(role as UserRole)) {
     return fallback;
   }
 
   // Check specific permission if provided
   if (permission) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rolePermissions = PERMISSIONS[role] as any;
+    const rolePermissions = (PERMISSIONS as any)[role];
     if (!rolePermissions || !rolePermissions[permission]) {
       return fallback;
     }

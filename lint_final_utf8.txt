@@ -3,22 +3,27 @@
 > eslint
 
 
-C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx
-  29:7  error  Error: This value cannot be modified
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\your-tasks\page.tsx
+  26:13  error  Error: Calling setState synchronously within an effect can trigger cascading renders
 
-Modifying a variable defined outside a component or hook is not allowed. Consider using an effect.
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
 
-C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx:29:7
-  27 |     try {
-  28 |       await signInWithEmailAndPassword(auth, email, password);
-> 29 |       document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-     |       ^^^^^^^^ value cannot be modified
-  30 |       router.push("/dashboard");
-  31 |     } catch (error: unknown) {
-  32 |       const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any  react-hooks/immutability
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
 
-C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\teams\TeamMembers.tsx
-  11:11  warning  'user' is assigned a value but never used  @typescript-eslint/no-unused-vars
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\your-tasks\page.tsx:26:13
+  24 |     useEffect(() => {
+  25 |         if (!user) {
+> 26 |             setLoading(false);
+     |             ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  27 |             return;
+  28 |         }
+  29 |         const unsub = subscribeToUserTasks(user.uid, (data, last) => {  react-hooks/set-state-in-effect
 
-✖ 2 problems (1 error, 1 warning)
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\lib\tasks.ts
+  106:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  127:18  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 3 problems (3 errors, 0 warnings)
 

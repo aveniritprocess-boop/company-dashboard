@@ -14,6 +14,8 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
   const [description, setDescription] = useState("");
   const [teamId, setTeamId] = useState(preselectedTeamId || "");
   const [userTeams, setUserTeams] = useState<Team[]>([]);
+  const [nameError, setNameError] = useState("");
+  const [submitError, setSubmitError] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -24,11 +26,29 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !name.trim() || !teamId) return;
+    setNameError("");
+    setSubmitError("");
+
+    if (!name.trim()) {
+      setNameError("Project name is required.");
+      return;
+    }
+    if (name.trim().length < 3) {
+      setNameError("Project name must be at least 3 characters.");
+      return;
+    }
+    if (!teamId && !preselectedTeamId) {
+      setSubmitError("Assigning a team is required.");
+      return;
+    }
+    if (!user) {
+      setSubmitError("Authentication error. Please re-login.");
+      return;
+    }
 
     setLoading(true);
     try {
-      await createProject(name, description, teamId, user.uid);
+      await createProject(name.trim(), description.trim(), teamId, user.uid);
       setName("");
       setDescription("");
       if(!preselectedTeamId) setTeamId("");
@@ -36,6 +56,7 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
       onProjectCreated();
     } catch (error) {
       console.error("Failed to create project", error);
+      setSubmitError("Failed to create project. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -64,6 +85,12 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
         </div>
         
         <form onSubmit={handleSubmit} className="space-y-4">
+          {submitError && (
+            <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-705 dark:text-red-400 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-900/30">
+              {submitError}
+            </div>
+          )}
+          
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Project Name</label>
             <input
@@ -74,6 +101,9 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
               className="mt-1 block w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-2 shadow-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:text-sm"
               placeholder="e.g. Website Redesign"
             />
+            {nameError && (
+              <p className="mt-1 text-xs text-red-500 font-semibold">{nameError}</p>
+            )}
           </div>
           
            <div>

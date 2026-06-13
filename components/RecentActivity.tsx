@@ -17,12 +17,20 @@ export function RecentActivity() {
 
         // Subscribe to tasks as a source of activity
         const unsubscribeTasks = subscribeToUserTasks(user.uid, (tasks) => {
-            const taskActivities = tasks.slice(0, 5).map(task => ({
+            const twoDaysAgo = new Date();
+            twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+
+            const recentTasks = tasks.filter(task => {
+                const taskDate = (task.createdAt && typeof task.createdAt === 'object' && 'toDate' in task.createdAt) ? (task.createdAt as { toDate: () => Date }).toDate() : new Date(0);
+                return taskDate >= twoDaysAgo;
+            });
+
+            const taskActivities = recentTasks.slice(0, 5).map(task => ({
                 id: task.id,
                 type: "task",
                 title: task.taskText,
                 status: task.status,
-                time: task.createdAt?.toDate ? task.createdAt.toDate() : new Date(),
+                time: (task.createdAt && typeof task.createdAt === 'object' && 'toDate' in task.createdAt) ? (task.createdAt as { toDate: () => Date }).toDate() : new Date(),
                 icon: task.status === "completed" ? CheckCircle2 : Clock,
                 color: task.status === "completed" ? "text-emerald-500" : "text-amber-500"
             }));

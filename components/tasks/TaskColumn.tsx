@@ -20,7 +20,11 @@ export function TaskColumn({ title, status, tasks, currentUserId }: TaskColumnPr
     in_progress: "bg-yellow-200 dark:bg-yellow-700",
     done: "bg-green-200 dark:bg-green-700",
     pending: "bg-amber-200 dark:bg-amber-700",
-    completed: "bg-emerald-200 dark:bg-emerald-700"
+    completed: "bg-emerald-200 dark:bg-emerald-700",
+    approved: "bg-teal-200 dark:bg-teal-700",
+    rejected: "bg-red-200 dark:bg-red-700",
+    hold: "bg-orange-200 dark:bg-orange-700",
+    review: "bg-yellow-200 dark:bg-yellow-700",
   };
 
   return (

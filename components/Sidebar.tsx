@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BarChart,
+  BarChart2,
   Settings,
   Users,
   FolderGit2,
@@ -55,12 +56,11 @@ export function Sidebar() {
 
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Daily Diary", href: "/dashboard/daily-diary", icon: ClipboardList },
+    { name: "Daily Summary", href: "/dashboard/daily-diary", icon: ClipboardList },
     { name: "Your Tasks", href: "/dashboard/your-tasks", icon: ListChecks },
+    { name: "Task Summary", href: "/dashboard/task-summary", icon: BarChart2 },
     { name: "Shared Sheet", href: "/dashboard/sheet", icon: TableProperties },
-    ...(role === "admin" || role === "ceo"
-      ? [{ name: "Task Given By Sir", href: "/dashboard/task-given-by-sir", icon: UserCheck }]
-      : []),
+    { name: "Assign Tasks", href: "/dashboard/tasks-assigned", icon: UserCheck },
     ...(role === "admin" || role === "ceo"
       ? [{ name: "Employees", href: "/dashboard/employees", icon: Users }]
       : []),
@@ -74,6 +74,8 @@ export function Sidebar() {
     ...(role === "admin" || role === "ceo"
       ? [{ name: "Locations", href: "/dashboard/locations", icon: MapPin }]
       : []),
+    { name: "Sales Leads", href: "/dashboard/sales-leads", icon: FolderGit2 },
+    { name: "Service Leads", href: "/dashboard/service-leads", icon: FolderGit2 },
     { name: "Progress", href: "/dashboard/progress", icon: BarChart },
     { name: "Sales Leads", href: "/dashboard/sales-leads", icon: TrendingUp },
     { name: "Service Leads", href: "/dashboard/service-leads", icon: Headset },
@@ -175,12 +177,16 @@ export function Sidebar() {
           ...(role === "admin" || role === "manager" || role === "ceo" ? [
             {
               label: "Management",
-              items: navigation.filter(i => ["Task Given By Sir", "Employees", "Teams", "Projects", "Locations"].includes(i.name))
+              items: navigation.filter(i => ["Employees", "Teams", "Projects", "Locations"].includes(i.name))
             }
           ] : []),
           {
             label: "System",
             items: navigation.filter(i => ["Settings"].includes(i.name))
+          },
+          {
+            label: "Leads",
+            items: navigation.filter(i => ["Sales Leads", "Service Leads"].includes(i.name))
           }
         ].map((section) => (
           <div key={section.label} className="space-y-1">

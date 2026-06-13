@@ -1,0 +1,37 @@
+﻿
+> personal-dashboard-temp@0.1.0 lint
+> eslint
+
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\(auth)\login\page.tsx
+  5:15  warning  'setDoc' is defined but never used  @typescript-eslint/no-unused-vars
+  8:8   warning  'Link' is defined but never used    @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\employees\page.tsx
+   12:8    warning  'Papa' is defined but never used                                                                               @typescript-eslint/no-unused-vars
+   14:122  warning  'Filter' is defined but never used                                                                             @typescript-eslint/no-unused-vars
+   45:28   warning  'setFilterLocation' is assigned a value but never used                                                         @typescript-eslint/no-unused-vars
+   46:24   warning  'setFilterDept' is assigned a value but never used                                                             @typescript-eslint/no-unused-vars
+   79:8    warning  React Hook useEffect has a missing dependency: 'fetchUsers'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+  126:25   error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  155:18   warning  'error' is defined but never used                                                                              @typescript-eslint/no-unused-vars
+  203:101  error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+  222:11   warning  'uniqueLocations' is assigned a value but never used                                                           @typescript-eslint/no-unused-vars
+  223:11   warning  'uniqueDepts' is assigned a value but never used                                                               @typescript-eslint/no-unused-vars
+  229:35   error    Unexpected any. Specify a different type                                                                       @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\app\dashboard\tasks-assigned\page.tsx
+  17:10  warning  'EnhancedTaskCard' is defined but never used  @typescript-eslint/no-unused-vars
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\RecentActivity.tsx
+  24:102  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  33:91   error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\tasks\AdminTaskSummaryWidget.tsx
+  63:36  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\Himanshu sharma\OneDrive\Documents\GitHub\company-dashboard\components\tasks\TaskTable.tsx
+  73:165  error  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 18 problems (7 errors, 11 warnings)
+

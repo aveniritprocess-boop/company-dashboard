@@ -14,10 +14,12 @@ export function AttendanceActions() {
   const { activeSession, elapsedSeconds, loading, refreshSession } = useAttendanceSession();
   const [showCamera, setShowCamera] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [error, setError] = useState("");
 
   const handleCapture = async (file: File) => {
     if (!user) return;
     setProcessing(true);
+    setError("");
     try {
       const imageUrl = await uploadImage(file);
       
@@ -29,9 +31,9 @@ export function AttendanceActions() {
       
       await refreshSession(); 
       setShowCamera(false);
-    } catch (error) {
-      console.error("Error processing attendance:", error);
-      alert("Failed to process attendance. Please try again.");
+    } catch (err: unknown) {
+      console.error("Error processing attendance:", err);
+      setError("Failed to process attendance. Please try again.");
     } finally {
       setProcessing(false);
     }
@@ -65,7 +67,12 @@ export function AttendanceActions() {
   }
 
   return (
-    <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700">
+    <div className="p-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 space-y-4">
+      {error && (
+        <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-900/30">
+          {error}
+        </div>
+      )}
       <div className="flex flex-col md:flex-row items-center justify-between gap-6">
         <div>
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">Attendance</h2>

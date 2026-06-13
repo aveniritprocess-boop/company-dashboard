@@ -2,22 +2,29 @@ import Link from "next/link";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-gray-50">
-      <h1 className="text-4xl font-bold text-gray-900">Avenir Tech Company Portal</h1>
-      <div className="mt-8 flex gap-4">
-        <Link
-          href="/login"
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary-hover"
-        >
-          Log in
-        </Link>
-        <Link
-          href="/signup"
-          className="rounded-md bg-white border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-        >
-          Sign up
-        </Link>
+    <div className="flex min-h-screen flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 lg:px-8 transition-colors duration-200">
+      <div className="w-full max-w-lg text-center space-y-8 animate-slide-up">
+        {/* Branding & Text */}
+        <div className="space-y-3">
+          <h1 className="text-xl sm:text-2xl font-extrabold tracking-[0.18em] text-slate-800 dark:text-slate-100 uppercase">
+            Avenir Tech Company Portal
+          </h1>
+          <p className="text-[10px] sm:text-xs text-slate-400 dark:text-slate-500 font-bold uppercase tracking-widest leading-relaxed">
+            Enterprise HRMS & Employee Management System
+          </p>
+        </div>
+
+        {/* Action Button */}
+        <div className="pt-2">
+          <Link
+            href="/login"
+            className="inline-flex justify-center items-center w-full sm:w-auto px-8 py-3.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-indigo-600/10"
+          >
+            Log in
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
+
