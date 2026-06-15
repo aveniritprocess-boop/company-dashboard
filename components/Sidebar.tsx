@@ -74,8 +74,6 @@ export function Sidebar() {
     ...(role === "admin" || role === "ceo"
       ? [{ name: "Locations", href: "/dashboard/locations", icon: MapPin }]
       : []),
-    { name: "Sales Leads", href: "/dashboard/sales-leads", icon: FolderGit2 },
-    { name: "Service Leads", href: "/dashboard/service-leads", icon: FolderGit2 },
     { name: "Progress", href: "/dashboard/progress", icon: BarChart },
     { name: "Sales Leads", href: "/dashboard/sales-leads", icon: TrendingUp },
     { name: "Service Leads", href: "/dashboard/service-leads", icon: Headset },

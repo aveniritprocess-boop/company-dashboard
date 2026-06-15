@@ -11,6 +11,7 @@ import { RecentTaskSummary } from "@/components/tasks/RecentTaskSummary";
 import { DashboardSearch } from "@/components/DashboardSearch";
 import { TodayTasksWidget } from "@/components/TodayTasksWidget";
 import { DayReportWidget } from "@/components/DayReportWidget";
+import { QuickTaskWidget } from "@/components/tasks/QuickTaskWidget";
 import { Sparkles } from "lucide-react";
 
 export default function DashboardPage() {
