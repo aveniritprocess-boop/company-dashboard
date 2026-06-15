@@ -44,7 +44,8 @@ export function TodayTasksWidget() {
         const unsubTasks = subscribeToAllTasks((allTasks) => {
             // Filter tasks created today
             const todayTasks = allTasks.filter(task => {
-                const taskDate = task.createdAt?.toDate ? task.createdAt.toDate() : new Date();
+                const createdAt: any = task.createdAt;
+                const taskDate = createdAt?.toDate ? createdAt.toDate() : new Date();
                 taskDate.setHours(0, 0, 0, 0);
                 return taskDate.getTime() === today.getTime();
             });
