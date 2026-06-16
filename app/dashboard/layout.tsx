@@ -21,7 +21,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!loading && !user) {
-      document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
+      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
       window.location.href = "/login";
       return;
     }

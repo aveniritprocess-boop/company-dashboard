@@ -64,7 +64,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         // Enforce deactivation, locked status, and portal access disabled
                         if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
                             auth.signOut();
-                            document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
+                            document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
                             setRole(null);
                             setUser(null);
                             setLoading(false);

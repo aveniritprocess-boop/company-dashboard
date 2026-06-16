@@ -34,7 +34,7 @@ export async function authenticatedFetch(
       console.error("Error signing out from auth:", err);
     }
     // Clear cookie
-    document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
+    document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
     
     // Redirect to login with expired query
     if (typeof window !== "undefined") {

@@ -17,7 +17,7 @@ export function SidebarUser({ isCollapsed }: SidebarUserProps) {
   const handleSignOut = async () => {
     try {
       await signOut(auth);
-      document.cookie = "session=; path=/; max-age=0; SameSite=Lax";
+      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
       window.location.href = "/login";
     } catch (error) {
       console.error("Error signing out", error);

@@ -31,7 +31,7 @@ export default function LoginPage() {
 
   // ── Set cookie and navigate — cookie MUST be set before navigation ──
   const goToDashboard = () => {
-    document.cookie = "session=true; path=/; max-age=86400; SameSite=Lax";
+    document.cookie = "session=true; path=/; max-age=86400; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
     window.location.href = "/dashboard";
   };
 
