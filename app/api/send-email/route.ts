@@ -1,10 +1,9 @@
 import { NextResponse } from "next/server";
-import nodemailer from "nodemailer";
 
 export async function POST(request: Request) {
   try {
     const { to, subject, html, text } = await request.json();
-    
+
     const user = process.env.GMAIL_USER; // avenir.itprocess@gmail.com
     const pass = process.env.GMAIL_APP_PASSWORD; // The 16-character app password
 
@@ -12,6 +11,10 @@ export async function POST(request: Request) {
       console.error("GMAIL_USER or GMAIL_APP_PASSWORD is not set");
       return NextResponse.json({ error: "Email service not configured" }, { status: 500 });
     }
+
+    // nodemailer is a CommonJS module with native internals that Turbopack cannot bundle
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nodemailer = require("nodemailer");
 
     const transporter = nodemailer.createTransport({
       service: "gmail",
@@ -33,8 +36,9 @@ export async function POST(request: Request) {
     console.log("Email sent: " + info.response);
 
     return NextResponse.json({ success: true, id: info.messageId });
-  } catch (error: any) {
-    console.error("Send Email Error:", error);
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 });
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error("Send Email Error:", err);
+    return NextResponse.json({ error: err.message || "Internal server error" }, { status: 500 });
   }
 }

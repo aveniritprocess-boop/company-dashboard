@@ -1,8 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { signInWithPopup, signInWithEmailAndPassword, getMultiFactorResolver, PhoneAuthProvider, PhoneMultiFactorGenerator, RecaptchaVerifier } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  getMultiFactorResolver,
+  PhoneAuthProvider,
+  PhoneMultiFactorGenerator,
+  RecaptchaVerifier
+} from "firebase/auth";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 
 export default function LoginPage() {
@@ -10,6 +20,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [initializing, setInitializing] = useState(true);
 
   // MFA State
   const [mfaResolver, setMfaResolver] = useState<import("firebase/auth").MultiFactorResolver | null>(null);
@@ -18,14 +29,60 @@ export default function LoginPage() {
   const [showMfa, setShowMfa] = useState(false);
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
 
+  // ── Set cookie and navigate — cookie MUST be set before navigation ──
+  const goToDashboard = () => {
+    document.cookie = "session=true; path=/; max-age=86400; SameSite=Lax";
+    window.location.href = "/dashboard";
+  };
+
+  // ── Effect 1: onAuthStateChanged — redirect if already logged in ──
+  // This is the key fix for the Google redirect flow: after signInWithRedirect
+  // brings the user back, Firebase fires onAuthStateChanged before
+  // getRedirectResult resolves. Without this, the user is stuck on login.
   useEffect(() => {
-    // Show session expired message if redirected
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      if (firebaseUser) {
+        // Already authenticated — do not redirect here; let validateUserStatusAndLogin handle it
+        // (it checks Firestore access flags). We just stop the initializing spinner.
+        setInitializing(false);
+      } else {
+        setInitializing(false);
+      }
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // ── Effect 2: Show session-expired message ──
+  useEffect(() => {
     if (typeof window !== "undefined") {
       const urlParams = new URLSearchParams(window.location.search);
       if (urlParams.get("expired") === "true") {
         setError("Your session has expired. Please sign in again.");
       }
     }
+  }, []);
+
+  // ── Effect 3: Handle Google redirect result on page load ──
+  useEffect(() => {
+    setLoading(true);
+    getRedirectResult(auth)
+      .then(async (result) => {
+        if (!result) {
+          setLoading(false);
+          return;
+        }
+        // Redirect result found — validate and login
+        await validateUserStatusAndLogin(result.user);
+      })
+      .catch((err: unknown) => {
+        const errorObj = err as Error & { code?: string };
+        // Suppress "no pending redirect" — normal on fresh page loads
+        if (errorObj?.code !== "auth/no-auth-event") {
+          setError(errorObj.message || "An error occurred. Please try again.");
+        }
+        setLoading(false);
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initMfa = async (resolver: import("firebase/auth").MultiFactorResolver) => {
@@ -63,7 +120,7 @@ export default function LoginPage() {
       const cred = PhoneAuthProvider.credential(verificationId, code);
       const multiFactorAssertion = PhoneMultiFactorGenerator.assertion(cred);
       const result = await mfaResolver!.resolveSignIn(multiFactorAssertion);
-      
+
       // Log login event
       try {
         const idToken = await result.user.getIdToken();
@@ -76,8 +133,7 @@ export default function LoginPage() {
         console.error("Failed to log login event:", err);
       }
 
-      document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-      window.location.href = "/dashboard";
+      goToDashboard();
     } catch (err: unknown) {
       setError((err as Error).message);
     } finally {
@@ -87,13 +143,13 @@ export default function LoginPage() {
 
   const validateUserStatusAndLogin = async (user: import("firebase/auth").User) => {
     const userDoc = await getDoc(doc(db, "users", user.uid));
-    
+
     if (userDoc.exists()) {
       const userData = userDoc.data();
       if (
-        userData.is_active === false || 
-        userData.portal_access === false || 
-        userData.is_locked === true || 
+        userData.is_active === false ||
+        userData.portal_access === false ||
+        userData.is_locked === true ||
         userData.is_deleted === true
       ) {
         await auth.signOut();
@@ -102,7 +158,6 @@ export default function LoginPage() {
     } else {
       // If user does not exist in directory, only Avenir IT Process manager email is allowed to auto-seed CEO
       if (user.email === "avenir.itprocess@gmail.com") {
-        const { setDoc } = await import("firebase/firestore");
         await setDoc(doc(db, "users", user.uid), {
           uid: user.uid,
           name: user.displayName || "Avenir IT Process",
@@ -123,7 +178,6 @@ export default function LoginPage() {
 
     // Set Avenir IT Process email back to CEO role if altered
     if (user.email === "avenir.itprocess@gmail.com" && userDoc.exists() && userDoc.data().role !== "ceo") {
-      const { updateDoc } = await import("firebase/firestore");
       await updateDoc(doc(db, "users", user.uid), { role: "ceo", is_active: true, portal_access: true });
     }
 
@@ -139,8 +193,7 @@ export default function LoginPage() {
       console.error("Failed to log login event:", err);
     }
 
-    document.cookie = "session=true; path=/; max-age=3600; SameSite=Lax";
-    window.location.href = "/dashboard";
+    goToDashboard();
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -168,23 +221,56 @@ export default function LoginPage() {
   const handleSocialLogin = async (provider: import("firebase/auth").AuthProvider) => {
     setError("");
     setLoading(true);
-    try {
-      const result = await signInWithPopup(auth, provider);
-      await validateUserStatusAndLogin(result.user);
-    } catch (err: unknown) {
-      const errorObj = err as Error & { code?: string };
-      if (errorObj.code === "auth/multi-factor-auth-required") {
-        setShowMfa(true);
-        const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
-        setMfaResolver(resolver);
-        initMfa(resolver);
-      } else {
-        setError(errorObj.message);
+
+    const isLocalhost =
+      typeof window !== "undefined" &&
+      (window.location.hostname === "localhost" ||
+        window.location.hostname === "127.0.0.1");
+
+    if (isLocalhost) {
+      // Use popup on localhost for faster developer experience
+      try {
+        const result = await signInWithPopup(auth, provider);
+        await validateUserStatusAndLogin(result.user);
+      } catch (err: unknown) {
+        const errorObj = err as Error & { code?: string };
+        if (errorObj.code === "auth/multi-factor-auth-required") {
+          setShowMfa(true);
+          const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
+          setMfaResolver(resolver);
+          initMfa(resolver);
+        } else if (errorObj.code === "auth/popup-blocked" || errorObj.code === "auth/unauthorized-domain") {
+          // Fall back to redirect if popup is blocked
+          await signInWithRedirect(auth, provider);
+        } else {
+          setError(errorObj.message);
+          setLoading(false);
+        }
       }
-    } finally {
-      setLoading(false);
+    } else {
+      // Always use redirect on production/Vercel — more reliable cross-origin
+      try {
+        await signInWithRedirect(auth, provider);
+        // Page navigates away; result is handled by Effect 3 on return
+      } catch (err: unknown) {
+        const errorObj = err as Error & { code?: string };
+        setError(errorObj.message);
+        setLoading(false);
+      }
     }
   };
+
+  // Show spinner while checking auth state or handling redirect
+  if (initializing || loading) {
+    return (
+      <div className="bg-white dark:bg-slate-900 px-8 py-10 shadow-2xl shadow-slate-100 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl max-w-md mx-auto animate-slide-up flex flex-col items-center justify-center min-h-[300px] gap-4">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent" />
+        <p className="text-xs text-slate-400 font-medium">
+          {loading ? "Connecting..." : "Loading..."}
+        </p>
+      </div>
+    );
+  }
 
   if (showMfa) {
     return (

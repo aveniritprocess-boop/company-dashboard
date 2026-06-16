@@ -170,7 +170,7 @@ export function Sidebar() {
         {[
           {
             label: "Main Menu",
-            items: navigation.filter(i => ["Dashboard", "Daily Diary", "Your Tasks", "Shared Sheet", "Attendance", "Progress", "Sales Leads", "Service Leads"].includes(i.name))
+            items: navigation.filter(i => ["Dashboard", "Daily Summary", "Your Tasks", "Task Summary", "Assign Tasks", "Shared Sheet", "Attendance", "Progress"].includes(i.name))
           },
           ...(role === "admin" || role === "manager" || role === "ceo" ? [
             {
@@ -179,12 +179,12 @@ export function Sidebar() {
             }
           ] : []),
           {
-            label: "System",
-            items: navigation.filter(i => ["Settings"].includes(i.name))
-          },
-          {
             label: "Leads",
             items: navigation.filter(i => ["Sales Leads", "Service Leads"].includes(i.name))
+          },
+          {
+            label: "System",
+            items: navigation.filter(i => ["Settings"].includes(i.name))
           }
         ].map((section) => (
           <div key={section.label} className="space-y-1">
