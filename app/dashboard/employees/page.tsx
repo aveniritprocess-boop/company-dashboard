@@ -139,6 +139,12 @@ export default function EmployeesDashboard() {
     
     const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
     
+    // Edit Modal states
+    const [showEditModal, setShowEditModal] = useState<AppUserSummary | null>(null);
+    const [editForm, setEditForm] = useState<Partial<CreationForm>>({});
+    const [editSubmitting, setEditSubmitting] = useState(false);
+    const [editValidationErrors, setEditValidationErrors] = useState<Record<string, string>>({});
+
     // Password reset modal states
     const [showResetPasswordModal, setShowResetPasswordModal] = useState<AppUserSummary | null>(null);
     const [tempPassword, setTempPassword] = useState("");
@@ -456,6 +462,52 @@ export default function EmployeesDashboard() {
         } catch (error: unknown) {
             const err = error as Error;
             showToast(err.message, "error");
+        }
+    };
+
+    const handleEditEmployee = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!showEditModal) return;
+        
+        const errors: Record<string, string> = {};
+        if (!editForm.name || editForm.name.trim().length < 3) errors.name = "Name must be at least 3 characters.";
+        if (!editForm.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(editForm.email)) errors.email = "Valid email is required.";
+        
+        if (editForm.email && editForm.email.toLowerCase() !== showEditModal.email?.toLowerCase()) {
+            const dupEmail = users.some(u => u.email?.toLowerCase() === editForm.email?.toLowerCase() && !u.is_deleted);
+            if (dupEmail) errors.email = "This email is already in use.";
+        }
+        
+        if (!editForm.mobile || !/^\+?[0-9\s-]{10,15}$/.test(editForm.mobile)) errors.mobile = "Valid mobile is required.";
+        if (!editForm.department || editForm.department.trim().length < 2) errors.department = "Department is required.";
+        if (!editForm.designation || editForm.designation.trim().length < 2) errors.designation = "Designation is required.";
+        
+        if (Object.keys(errors).length > 0) {
+            setEditValidationErrors(errors);
+            showToast("Please resolve all validation errors.", "error");
+            return;
+        }
+
+        setEditValidationErrors({});
+        setEditSubmitting(true);
+        try {
+            const response = await authenticatedFetch("/api/admin/update-employee", {
+                method: "POST",
+                body: JSON.stringify({
+                    uid: showEditModal.uid,
+                    ...editForm
+                })
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || "Failed to update employee");
+
+            showToast("Employee profile updated successfully", "success");
+            setShowEditModal(null);
+        } catch (error: unknown) {
+            const err = error as Error;
+            showToast(err.message, "error");
+        } finally {
+            setEditSubmitting(false);
         }
     };
 
@@ -1435,6 +1487,27 @@ export default function EmployeesDashboard() {
                                                                         </button>
 
                                                                         <button 
+                                                                            onClick={() => {
+                                                                                setEditForm({
+                                                                                    name: u.name || "",
+                                                                                    email: u.email || "",
+                                                                                    mobile: u.mobile || "",
+                                                                                    role: u.role || "employee",
+                                                                                    department: u.department || "",
+                                                                                    designation: u.designation || "",
+                                                                                    location: u.location || "",
+                                                                                    employee_type: u.employee_type as "permanent" | "contract" | "intern" | undefined,
+                                                                                });
+                                                                                setShowEditModal(u);
+                                                                                setDropdownOpenId(null);
+                                                                            }}
+                                                                            className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
+                                                                        >
+                                                                            <FileText className="h-4 w-4 text-indigo-600" />
+                                                                            Edit Profile Details
+                                                                        </button>
+
+                                                                        <button 
                                                                             onClick={() => { setShowResetPasswordModal(u); setDropdownOpenId(null); }}
                                                                             className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2"
                                                                         >
@@ -1993,6 +2066,80 @@ export default function EmployeesDashboard() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+            )}
+
+            {/* MODAL: EDIT EMPLOYEE */}
+            {showEditModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+                    <div className="bg-white dark:bg-slate-900 w-full max-w-2xl rounded-[2.5rem] shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden transform animate-in slide-in-from-bottom-8 duration-300 my-8">
+                        <div className="px-8 py-6 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/30 flex justify-between items-center">
+                            <div>
+                                <h2 className="text-xl font-black text-slate-900 dark:text-white">Edit Employee Profile</h2>
+                                <p className="text-xs text-slate-500">Update details for {showEditModal.name} ({showEditModal.employee_id})</p>
+                            </div>
+                            <button onClick={() => setShowEditModal(null)} className="p-2 rounded-xl hover:bg-red-500/10 text-slate-400 hover:text-red-500 transition-all">
+                                <XCircle className="h-6 w-6" />
+                            </button>
+                        </div>
+                        <form onSubmit={handleEditEmployee} className="p-8 space-y-6">
+                            <div className="grid grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Employee ID</label>
+                                    <input disabled value={showEditModal.employee_id || ""} className="w-full px-5 py-3 rounded-2xl border border-slate-150 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-sm focus:outline-none font-medium text-slate-500 cursor-not-allowed" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Full Name</label>
+                                    <input required value={editForm.name || ""} onChange={e => setEditForm({ ...editForm, name: e.target.value })} className={`w-full px-5 py-3 rounded-2xl border ${editValidationErrors.name ? 'border-rose-500' : 'border-slate-150 dark:border-slate-800'} bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white`} />
+                                    {editValidationErrors.name && <p className="text-rose-500 text-[10px] font-bold ml-1">{editValidationErrors.name}</p>}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email</label>
+                                    <input required type="email" value={editForm.email || ""} onChange={e => setEditForm({ ...editForm, email: e.target.value })} className={`w-full px-5 py-3 rounded-2xl border ${editValidationErrors.email ? 'border-rose-500' : 'border-slate-150 dark:border-slate-800'} bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white`} />
+                                    {editValidationErrors.email && <p className="text-rose-500 text-[10px] font-bold ml-1">{editValidationErrors.email}</p>}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Mobile</label>
+                                    <input required value={editForm.mobile || ""} onChange={e => setEditForm({ ...editForm, mobile: e.target.value })} className={`w-full px-5 py-3 rounded-2xl border ${editValidationErrors.mobile ? 'border-rose-500' : 'border-slate-150 dark:border-slate-800'} bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white`} />
+                                    {editValidationErrors.mobile && <p className="text-rose-500 text-[10px] font-bold ml-1">{editValidationErrors.mobile}</p>}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Department</label>
+                                    <input required value={editForm.department || ""} onChange={e => setEditForm({ ...editForm, department: e.target.value })} className={`w-full px-5 py-3 rounded-2xl border ${editValidationErrors.department ? 'border-rose-500' : 'border-slate-150 dark:border-slate-800'} bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white`} />
+                                    {editValidationErrors.department && <p className="text-rose-500 text-[10px] font-bold ml-1">{editValidationErrors.department}</p>}
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Designation</label>
+                                    <input required value={editForm.designation || ""} onChange={e => setEditForm({ ...editForm, designation: e.target.value })} className={`w-full px-5 py-3 rounded-2xl border ${editValidationErrors.designation ? 'border-rose-500' : 'border-slate-150 dark:border-slate-800'} bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white`} />
+                                    {editValidationErrors.designation && <p className="text-rose-500 text-[10px] font-bold ml-1">{editValidationErrors.designation}</p>}
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-5">
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">System Role</label>
+                                    <select value={editForm.role || "employee"} onChange={e => setEditForm({ ...editForm, role: e.target.value })} className="w-full px-5 py-3 rounded-2xl border border-slate-150 dark:border-slate-800 bg-white dark:bg-slate-905 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white">
+                                        {rolesList.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Base Location</label>
+                                    <input value={editForm.location || ""} onChange={e => setEditForm({ ...editForm, location: e.target.value })} className="w-full px-5 py-3 rounded-2xl border border-slate-150 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium text-slate-900 dark:text-white" />
+                                </div>
+                            </div>
+                            <div className="pt-4 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-800">
+                                <button type="button" onClick={() => setShowEditModal(null)} className="px-6 py-3 rounded-xl font-bold text-xs text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors">
+                                    Cancel
+                                </button>
+                                <button type="submit" disabled={editSubmitting} className="px-8 py-3 rounded-xl font-black text-xs text-white bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 transition-colors shadow-lg shadow-indigo-600/20">
+                                    {editSubmitting ? "Saving Changes..." : "Save Profile Details"}
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             )}

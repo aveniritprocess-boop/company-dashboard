@@ -44,7 +44,7 @@ export function TodayTasksWidget() {
         const unsubTasks = subscribeToAllTasks((allTasks) => {
             // Filter tasks created today
             const todayTasks = allTasks.filter(task => {
-                const createdAt: any = task.createdAt;
+                const createdAt = task.createdAt as { toDate?: () => Date };
                 const taskDate = createdAt?.toDate ? createdAt.toDate() : new Date();
                 taskDate.setHours(0, 0, 0, 0);
                 return taskDate.getTime() === today.getTime();
@@ -91,10 +91,10 @@ export function TodayTasksWidget() {
                 <div>
                     <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                         <Calendar className="h-5 w-5 text-indigo-500" />
-                        Today's Tasks & Status
+                        Today&apos;s Tasks & Status
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
-                        Live overview of today's assignments and responses.
+                        Live overview of today&apos;s assignments and responses.
                     </p>
                 </div>
                 <Link
@@ -151,7 +151,7 @@ export function TodayTasksWidget() {
 
                             {task.lastComment && (
                                 <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50">
-                                    "{task.lastComment.comment}"
+                                    &quot;{task.lastComment.comment}&quot;
                                     <div className="flex items-start gap-2 bg-white dark:bg-slate-900/50 p-2 rounded-xl">
                                         <MessageSquare className="h-3 w-3 text-indigo-400 mt-0.5 shrink-0" />
                                         <div className="min-w-0">

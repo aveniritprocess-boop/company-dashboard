@@ -98,7 +98,7 @@ export function DayReportWidget() {
                     </div>
                     <p className="text-sm font-bold text-slate-900 dark:text-white">No reports for this day</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        Team members haven't logged any entries for {new Date(selectedDate).toLocaleDateString()}.
+                        Team members haven&apos;t logged any entries for {new Date(selectedDate).toLocaleDateString()}.
                     </p>
                 </div>
             ) : (
