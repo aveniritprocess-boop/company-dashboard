@@ -32,18 +32,29 @@ export default function LoginPage() {
   // ── Set cookie and navigate — cookie MUST be set before navigation ──
   const goToDashboard = () => {
     document.cookie = "session=true; path=/; max-age=86400; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-    window.location.href = "/dashboard";
+    setTimeout(() => {
+      window.location.href = "/dashboard";
+    }, 100);
   };
 
+  const isValidating = useRef(false);
+
   // ── Effect 1: onAuthStateChanged — redirect if already logged in ──
-  // This is the key fix for the Google redirect flow: after signInWithRedirect
-  // brings the user back, Firebase fires onAuthStateChanged before
-  // getRedirectResult resolves. Without this, the user is stuck on login.
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      console.log("[AUTH] onAuthStateChanged fired. User:", firebaseUser ? firebaseUser.uid : "null");
       if (firebaseUser) {
-        // Already authenticated — do not redirect here; let validateUserStatusAndLogin handle it
-        // (it checks Firestore access flags). We just stop the initializing spinner.
+        if (!isValidating.current) {
+          isValidating.current = true;
+          console.log("[AUTH] Validating user from onAuthStateChanged fallback...");
+          try {
+            await validateUserStatusAndLogin(firebaseUser);
+          } catch (err: unknown) {
+            setError((err as Error).message);
+            isValidating.current = false;
+            setLoading(false);
+          }
+        }
         setInitializing(false);
       } else {
         setInitializing(false);
@@ -62,25 +73,33 @@ export default function LoginPage() {
     }
   }, []);
 
-  // ── Effect 3: Handle Google redirect result on page load ──
+  // ── Effect 3: Handle Google redirect result on page load (fallback only) ──
   useEffect(() => {
-    setLoading(true);
+    console.log("[AUTH] Calling getRedirectResult (fallback)...");
     getRedirectResult(auth)
       .then(async (result) => {
+        console.log("[AUTH] getRedirectResult resolved. Result:", result ? "present" : "null");
         if (!result) {
-          setLoading(false);
           return;
         }
-        // Redirect result found — validate and login
-        await validateUserStatusAndLogin(result.user);
+        if (!isValidating.current) {
+          isValidating.current = true;
+          console.log("[AUTH] Validating user from getRedirectResult:", result.user.uid);
+          try {
+            await validateUserStatusAndLogin(result.user);
+          } catch (err: unknown) {
+            setError((err as Error).message);
+            isValidating.current = false;
+            setLoading(false);
+          }
+        }
       })
       .catch((err: unknown) => {
         const errorObj = err as Error & { code?: string };
-        // Suppress "no pending redirect" — normal on fresh page loads
+        console.error("[AUTH] getRedirectResult error:", errorObj);
         if (errorObj?.code !== "auth/no-auth-event") {
           setError(errorObj.message || "An error occurred. Please try again.");
         }
-        setLoading(false);
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -222,38 +241,28 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
 
-    const isLocalhost =
-      typeof window !== "undefined" &&
-      (window.location.hostname === "localhost" ||
-        window.location.hostname === "127.0.0.1");
-
-    if (isLocalhost) {
-      // Use popup on localhost for faster developer experience
-      try {
-        const result = await signInWithPopup(auth, provider);
-        await validateUserStatusAndLogin(result.user);
-      } catch (err: unknown) {
-        const errorObj = err as Error & { code?: string };
-        if (errorObj.code === "auth/multi-factor-auth-required") {
-          setShowMfa(true);
-          const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
-          setMfaResolver(resolver);
-          initMfa(resolver);
-        } else if (errorObj.code === "auth/popup-blocked" || errorObj.code === "auth/unauthorized-domain") {
-          // Fall back to redirect if popup is blocked
+    // Always use popup — signInWithRedirect fails on cross-origin Vercel deployments
+    // because the authDomain (firebaseapp.com) differs from the hosting domain (vercel.app).
+    // Modern browsers partition sessionStorage by origin, so getRedirectResult returns null.
+    try {
+      const result = await signInWithPopup(auth, provider);
+      await validateUserStatusAndLogin(result.user);
+    } catch (err: unknown) {
+      const errorObj = err as Error & { code?: string };
+      if (errorObj.code === "auth/multi-factor-auth-required") {
+        setShowMfa(true);
+        const resolver = getMultiFactorResolver(auth, err as import("firebase/auth").MultiFactorError);
+        setMfaResolver(resolver);
+        initMfa(resolver);
+      } else if (errorObj.code === "auth/popup-blocked") {
+        // Last-resort fallback to redirect if popup is blocked
+        try {
           await signInWithRedirect(auth, provider);
-        } else {
-          setError(errorObj.message);
+        } catch (redirectErr: unknown) {
+          setError((redirectErr as Error).message);
           setLoading(false);
         }
-      }
-    } else {
-      // Always use redirect on production/Vercel — more reliable cross-origin
-      try {
-        await signInWithRedirect(auth, provider);
-        // Page navigates away; result is handled by Effect 3 on return
-      } catch (err: unknown) {
-        const errorObj = err as Error & { code?: string };
+      } else {
         setError(errorObj.message);
         setLoading(false);
       }
