@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { checkRateLimit } from '@/lib/rate-limiter';
 
 export async function POST(request: NextRequest) {
     try {
@@ -8,6 +9,11 @@ export async function POST(request: NextRequest) {
         const user = await verifyFirebaseToken(request);
         if ('error' in user) {
             return NextResponse.json({ error: user.error }, { status: user.status });
+        }
+
+        const rateLimit = checkRateLimit(user.uid);
+        if (!rateLimit.allowed) {
+            return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
         if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
