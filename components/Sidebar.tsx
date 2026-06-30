@@ -17,6 +17,7 @@ import {
   TableProperties,
   TrendingUp,
   Headset,
+  Activity,
 } from "lucide-react";
 import { SidebarUser } from "./SidebarUser";
 import { useAuth } from "./AuthProvider";
@@ -72,7 +73,10 @@ export function Sidebar() {
       ]
       : []),
     ...(role === "admin" || role === "ceo"
-      ? [{ name: "Locations", href: "/dashboard/locations", icon: MapPin }]
+      ? [
+        { name: "Locations", href: "/dashboard/locations", icon: MapPin },
+        { name: "Monitoring", href: "/dashboard/monitoring", icon: Activity }
+      ]
       : []),
     { name: "Progress", href: "/dashboard/progress", icon: BarChart },
     { name: "Sales Leads", href: "/dashboard/sales-leads", icon: TrendingUp },
@@ -184,7 +188,7 @@ export function Sidebar() {
           },
           {
             label: "System",
-            items: navigation.filter(i => ["Settings"].includes(i.name))
+            items: navigation.filter(i => ["Settings", "Monitoring"].includes(i.name))
           }
         ].map((section) => (
           <div key={section.label} className="space-y-1">

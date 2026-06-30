@@ -3,14 +3,13 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { subscribeToAllTasks, subscribeToTaskComments, Task, TaskComment } from "@/lib/tasks";
-import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers } from "@/lib/users";
 import {
     CheckCircle2,
     Clock,
     MessageSquare,
     User,
     Calendar,
-    Loader2,
     ChevronRight
 } from "lucide-react";
 import Link from "next/link";
@@ -20,7 +19,7 @@ interface TaskWithComments extends Task {
 }
 
 export function TodayTasksWidget() {
-    const { user, role } = useAuth();
+    const { user } = useAuth();
     const [tasks, setTasks] = useState<TaskWithComments[]>([]);
     const [users, setUsers] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);

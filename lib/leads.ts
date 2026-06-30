@@ -18,6 +18,7 @@ import {
 import { db } from "@/lib/firebase";
 import { createNotification, sendEmail } from "./notifications";
 import { getUserById } from "./users";
+import { APP_URL } from "./config";
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Proposal" | "Negotiation" | "Won" | "Lost" | "Pending" | "In Progress" | "Resolved";
 
@@ -75,8 +76,8 @@ export async function addLead(
       await sendEmail(
         assignee.email,
         title,
-        `Hello ${assignee.name},\n\n${msg}\n\nClient: ${data.clientName}\nNotes: ${data.notes}\n\nView it on the dashboard: https://company-dashboard-avenirit.web.app${leadPath}`,
-        `<p>Hello ${assignee.name},</p><p>${msg}</p><p><strong>Client:</strong> ${data.clientName}<br><strong>Notes:</strong> ${data.notes}</p><p>View it on the <a href="https://company-dashboard-avenirit.web.app${leadPath}">Dashboard</a></p>`
+        `Hello ${assignee.name},\n\n${msg}\n\nClient: ${data.clientName}\nNotes: ${data.notes}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
+        `<p>Hello ${assignee.name},</p><p>${msg}</p><p><strong>Client:</strong> ${data.clientName}<br><strong>Notes:</strong> ${data.notes}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
       );
     }
   }
@@ -114,8 +115,8 @@ export async function updateLead(
       await sendEmail(
         assignee.email,
         title,
-        `Hello ${assignee.name},\n\n${msg}\n\nView it on the dashboard: https://company-dashboard-avenirit.web.app${leadPath}`,
-        `<p>Hello ${assignee.name},</p><p>${msg}</p><p>View it on the <a href="https://company-dashboard-avenirit.web.app${leadPath}">Dashboard</a></p>`
+        `Hello ${assignee.name},\n\n${msg}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
+        `<p>Hello ${assignee.name},</p><p>${msg}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
       );
     }
   }

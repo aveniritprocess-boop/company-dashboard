@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { Bell, X, User as UserIcon, Calendar, FileText } from "lucide-react";
-import { AppNotification, subscribeToNotifications, markNotificationAsRead, markAllNotificationsAsRead } from "@/lib/notifications";
+import { AppNotification, subscribeToNotifications, markNotificationAsRead, markAllNotificationsAsRead, getUnreadNotificationsCount } from "@/lib/notifications";
 import { useAuth } from "@/components/AuthProvider";
 import { useToast } from "./ToastProvider";
 import Link from "next/link";
@@ -13,6 +13,7 @@ export function NotificationDropdown() {
   const { addToast } = useToast();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const lastSeenRef = useRef<string | null>(null);
 
@@ -29,9 +30,14 @@ export function NotificationDropdown() {
         lastSeenRef.current = latest.id;
       }
       setNotifications(newNotifs);
-    });
+    }, 25);
     return () => unsub();
   }, [user, addToast]);
+
+  useEffect(() => {
+    if (!user) return;
+    getUnreadNotificationsCount(user.uid).then(setUnreadCount).catch(console.error);
+  }, [user, notifications]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -44,8 +50,6 @@ export function NotificationDropdown() {
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
-
-  const unreadCount = notifications.filter(n => !n.read).length;
 
   const handleMarkAllRead = async () => {
     if (!user || unreadCount === 0) return;

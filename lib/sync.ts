@@ -1,4 +1,5 @@
 // sync.ts
+import { devLog } from "@/lib/logger";
 
 // This file handles logic for smart synchronization
 // Since we are using Firestore's persistence, 'sync' happens automatically.
@@ -23,5 +24,5 @@ export async function checkForRemoteUpdates(userId: string) {
     // though Firestore SDK usually handles this well.
 
     // This is a placeholder for where robust sync logic would live if we weren't using the SDK.
-    console.log(`Checking for remote updates for user ${userId}...`);
+    devLog(`Checking for remote updates for user ${userId}...`);
 }

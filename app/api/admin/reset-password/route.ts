@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { ResetPasswordSchema } from '@/lib/validators/auth';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,17 +23,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can reset passwords' }, { status: 403 });
         }
 
-        // 2. Parse target user ID and new password
+        // 2. Parse and validate target user ID and new password
         const body = await request.json();
-        const { uid, password } = body;
-
-        if (!uid || !password) {
-            return NextResponse.json({ error: 'Missing required fields: uid, password' }, { status: 400 });
-        }
-
-        if (password.length < 6) {
-            return NextResponse.json({ error: 'Password must be at least 6 characters long' }, { status: 400 });
-        }
+        const validation = parseOrError(ResetPasswordSchema, body);
+        if ('response' in validation) return validation.response;
+        const { uid, password } = validation.data;
 
         // Fetch employee details for validation and audit trail
         const targetDoc = await adminDb.collection('users').doc(uid).get();
@@ -69,18 +66,23 @@ export async function POST(request: NextRequest) {
         }
 
         // 5. Create Audit Log
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Admin',
-            action: 'update',
-            target_id: uid,
-            target_name: targetName,
+        await logActivityServer({
+            action: "settings_changed",
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Admin',
+            targetId: uid,
+            targetType: "settings",
+            severity: "warning",
             details: `Reset password for employee ${targetName} (${targetData?.employee_id || 'N/A'}). Session revoked, and password change forced on next login.`,
+            correlationId: user.correlationId,
+            metadata: {
+                targetName,
+                employee_id: targetData?.employee_id || 'N/A'
+            },
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

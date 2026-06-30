@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useAuth } from "../AuthProvider";
 import { createTeamWithIndex } from "@/lib/teams";
 import { Plus, X } from "lucide-react";
+import { CreateTeamSchema } from "@/lib/validators/team";
+import type { ZodIssue } from "zod";
 
 export function CreateTeamDialog({ onTeamCreated }: { onTeamCreated: () => void }) {
   const { user } = useAuth();
@@ -18,12 +20,17 @@ export function CreateTeamDialog({ onTeamCreated }: { onTeamCreated: () => void 
     setNameError("");
     setSubmitError("");
 
-    if (!name.trim()) {
-      setNameError("Team name is required.");
-      return;
-    }
-    if (name.trim().length < 3) {
-      setNameError("Team name must be at least 3 characters.");
+    // Zod validation
+    const zodResult = CreateTeamSchema.safeParse({
+      name: name.trim(),
+      ownerUid: user?.uid || "",
+      ownerEmail: user?.email || "",
+    });
+    if (!zodResult.success) {
+      const nameErr = zodResult.error.issues.find((e: ZodIssue) => String(e.path[0]) === 'name');
+      const otherErr = zodResult.error.issues.find((e: ZodIssue) => String(e.path[0]) !== 'name');
+      if (nameErr) setNameError(nameErr.message);
+      else if (otherErr) setSubmitError(otherErr.message);
       return;
     }
     if (!user) {

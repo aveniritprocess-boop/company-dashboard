@@ -16,12 +16,18 @@ export function SidebarUser({ isCollapsed }: SidebarUserProps) {
 
   const handleSignOut = async () => {
     try {
+      console.error("SIGNOUT_TRIGGERED");
+      console.trace();
       await signOut(auth);
       document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
+      console.error("LOGIN_REDIRECT_TRIGGERED");
+      console.trace();
       window.location.href = "/login";
     } catch (error) {
       console.error("Error signing out", error);
       // Fallback redirect
+      console.error("LOGIN_REDIRECT_TRIGGERED");
+      console.trace();
       window.location.href = "/login";
     }
   };

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { logActivityServer } from '@/lib/audit-server';
 
 export async function POST(request: NextRequest) {
     try {
@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
 
         // 2. Parse body fields
         const body = await request.json();
-        const { action, target_id, target_name, details } = body;
+        const { action, target_id, target_name, details, before, after } = body;
 
         const allowedActions = ['login', 'logout', 'role_create', 'permission_change', 'update'];
         if (!action || !allowedActions.includes(action)) {
@@ -28,19 +28,29 @@ export async function POST(request: NextRequest) {
             }
         }
 
+        // Map action to targetType
+        let targetType: "user" | "settings" = "user";
+        if (action === 'role_create' || action === 'permission_change') {
+            targetType = "settings";
+        }
+
         // 3. Write event to Audit Logs
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Employee',
-            action: action,
-            target_id: target_id || user.uid,
-            target_name: target_name || user.name || user.email || 'Self',
+        await logActivityServer({
+            action: action, // login, logout, role_create, permission_change
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Employee',
+            targetId: target_id || user.uid,
+            targetType,
             details: finalDetails,
+            metadata: {
+                targetName: target_name || 'Self',
+                before: before || null,
+                after: after || null
+            },
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

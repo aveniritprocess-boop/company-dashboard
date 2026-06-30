@@ -12,9 +12,7 @@ import {
 } from "@/lib/tasks";
 import { subscribeToRecentDiaryEntries, DailyDiaryEntry } from "@/lib/dailyDiary";
 import { getAllUsers, AppUserSummary } from "@/lib/users";
-
-import { 
-  Search, 
+import {
   Plus, 
   Grid, 
   List, 
@@ -29,7 +27,6 @@ import {
   User,
   ArrowRight,
   ArrowLeft,
-  ChevronDown,
   Loader2
 } from "lucide-react";
 import { MncTaskCard } from "./MncTaskCard";
@@ -38,6 +35,10 @@ import { ActivityTimeline } from "./ActivityTimeline";
 import { TaskDetailsModal } from "./TaskDetailsModal";
 import { CreateTaskModal } from "./CreateTaskModal";
 import { TaskCommentPanel } from "./TaskCommentPanel";
+import { TaskSearchPanel } from "@/components/search/TaskSearchPanel";
+import { searchTasks } from "@/lib/search/task-search";
+import { ExportMenu } from "@/components/export/ExportMenu";
+
 
 interface TasksHubProps {
   defaultTab?: "dashboard" | "board" | "list" | "team-feed" | "timeline";
@@ -54,7 +55,7 @@ const STATS_CARDS_CONFIG = [
   { key: "completed", label: "Completed Tasks", icon: CheckCircle, color: "from-emerald-500 to-emerald-600", text: "text-emerald-600 dark:text-emerald-400" }
 ];
 
-export function TasksHub({ defaultTab = "dashboard", defaultFilter = "all" }: TasksHubProps) {
+export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
   const { user, role } = useAuth();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [diaryEntries, setDiaryEntries] = useState<DailyDiaryEntry[]>([]);
@@ -63,9 +64,8 @@ export function TasksHub({ defaultTab = "dashboard", defaultFilter = "all" }: Ta
 
   // Filters & Tabs State
   const [activeTab, setActiveTab] = useState(defaultTab);
-  const [activeFilter, setActiveFilter] = useState(defaultFilter);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [sortOption, setSortOption] = useState<"newest" | "dueDate" | "priority" | "status" | "progress">("newest");
+  const [isSearching, setIsSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<Task[]>([]);
 
   // Detail & Comments Overlay
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
@@ -153,79 +153,10 @@ export function TasksHub({ defaultTab = "dashboard", defaultFilter = "all" }: Ta
     };
   }, [tasks, user]);
 
-  // Multi-Filter Chip Handling
-  const filteredTasks = useMemo(() => {
-    const q = searchQuery.toLowerCase();
-    const currentUid = user?.uid || "";
-
-    return tasks.filter(t => {
-      // 1. Text Search
-      if (q) {
-        const titleMatch = (t.taskText || t.title || "").toLowerCase().includes(q);
-        const descMatch = (t.description || "").toLowerCase().includes(q);
-        const assignees = Array.isArray(t.assignedTo) ? t.assignedTo : t.assignedTo ? [t.assignedTo] : [];
-        const assigneeNamesMatch = assignees.some(uid => (userMap.get(uid) || "").toLowerCase().includes(q));
-        const assignerMatch = (userMap.get(t.assignedBy) || "").toLowerCase().includes(q);
-        
-        if (!titleMatch && !descMatch && !assigneeNamesMatch && !assignerMatch) return false;
-      }
-
-      // 2. Filter Tabs
-      const assignees = Array.isArray(t.assignedTo) ? t.assignedTo : t.assignedTo ? [t.assignedTo] : [];
-      
-      switch (activeFilter) {
-        case "my-tasks":
-        case "assigned-to-me":
-          return assignees.includes(currentUid);
-        case "assigned-by-me":
-          return t.assignedBy === currentUid;
-        case "self-tasks":
-          return (assignees.length === 1 && assignees[0] === t.assignedBy) || t.assignedBy === t.assignedTo;
-        case "team-tasks":
-          return assignees.length >= 2;
-        case "completed":
-          return t.status === "completed" || t.status === "approved" || t.status === "done";
-        case "pending":
-          return t.status === "pending" || t.status === "todo" || t.status === "backlog" || t.status === "in_progress" || t.status === "review";
-        case "critical":
-          return t.priority === "critical";
-        case "overdue":
-          const completedStatuses = ["completed", "approved", "done"];
-          return !completedStatuses.includes(t.status) && t.dueDate && new Date(t.dueDate) < new Date();
-        default:
-          return true;
-      }
-    });
-  }, [tasks, searchQuery, activeFilter, user, userMap]);
-
-  // Sorting
+  // Multi-Filter Chip Handling & Sorting
   const sortedTasks = useMemo(() => {
-    const data = [...filteredTasks];
-    const PRIORITY_VAL = { critical: 4, high: 3, medium: 2, low: 1 };
-    
-    data.sort((a, b) => {
-      switch (sortOption) {
-        case "dueDate":
-          const dA = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
-          const dB = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
-          return dA - dB;
-        case "priority":
-          const pA = PRIORITY_VAL[a.priority as keyof typeof PRIORITY_VAL] || 0;
-          const pB = PRIORITY_VAL[b.priority as keyof typeof PRIORITY_VAL] || 0;
-          return pB - pA;
-        case "status":
-          return (a.status || "").localeCompare(b.status || "");
-        case "progress":
-          return (b.progress || 0) - (a.progress || 0);
-        case "newest":
-        default:
-          const tA = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? (a.createdAt instanceof Date ? a.createdAt.getTime() : 0);
-          const tB = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? (b.createdAt instanceof Date ? b.createdAt.getTime() : 0);
-          return tB - tA;
-      }
-    });
-    return data;
-  }, [filteredTasks, sortOption]);
+    return isSearching ? searchResults : tasks;
+  }, [tasks, isSearching, searchResults]);
 
   // Kanban Columns
   const boardColumns = useMemo(() => {
@@ -270,16 +201,7 @@ export function TasksHub({ defaultTab = "dashboard", defaultFilter = "all" }: Ta
           return (
             <div 
               key={config.key}
-              onClick={() => {
-                if (config.key === "myTasks") setActiveFilter("my-tasks");
-                else if (config.key === "assignedByMe") setActiveFilter("assigned-by-me");
-                else if (config.key === "assignedToMe") setActiveFilter("assigned-to-me");
-                else if (config.key === "pending") setActiveFilter("pending");
-                else if (config.key === "overdue") setActiveFilter("overdue");
-                else if (config.key === "completed") setActiveFilter("completed");
-                else setActiveFilter("all");
-              }}
-              className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-indigo-150 transition-all cursor-pointer group relative overflow-hidden shrink-0"
+              className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-4 flex flex-col justify-between shadow-sm hover:shadow-md transition-all group relative overflow-hidden shrink-0"
             >
               <div className="flex justify-between items-start">
                 <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider leading-tight">
@@ -326,71 +248,64 @@ export function TasksHub({ defaultTab = "dashboard", defaultFilter = "all" }: Ta
         </div>
 
         {/* Toolbar Controls */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Search bar */}
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search by keywords or name..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-full sm:w-56 text-slate-800 dark:text-slate-100 font-semibold"
-            />
-          </div>
+      </div>
 
-          {/* Sort selection */}
-          <div className="relative">
-            <select
-              value={sortOption}
-              onChange={(e) => setSortOption(e.target.value as "newest" | "dueDate" | "priority" | "status" | "progress")}
-              className="pl-3 pr-8 py-2 text-xs rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-850 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 appearance-none font-semibold text-slate-655 dark:text-slate-300 cursor-pointer"
-            >
-              <option value="newest">Sort: Updated</option>
-              <option value="dueDate">Sort: Due Date</option>
-              <option value="priority">Sort: Priority</option>
-              <option value="progress">Sort: Progress</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-400 pointer-events-none" />
-          </div>
-
-          {/* Create Task Button */}
-          <button
+      <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-8">
+        <h2 className="text-xl font-bold text-slate-800 dark:text-white">Active Tasks Overview</h2>
+        <div className="flex items-center gap-3">
+          <ExportMenu 
+            data={sortedTasks.map(t => ({
+              ...t,
+              assignedToNames: (Array.isArray(t.assignedTo) ? t.assignedTo : (t.assignedTo ? [t.assignedTo] : [])).map(uid => userMap.get(uid) || uid).join(", "),
+              assignedByName: userMap.get(t.assignedBy) || t.assignedBy,
+              dueDateFmt: t.dueDate ? new Date(t.dueDate).toLocaleDateString() : "N/A"
+            }))}
+            columns={[
+              { key: "title", header: "Task Title" },
+              { key: "assignedByName", header: "Assigned By" },
+              { key: "assignedToNames", header: "Assigned To" },
+              { key: "priority", header: "Priority" },
+              { key: "status", header: "Status" },
+              { key: "progress", header: "Progress (%)" },
+              { key: "dueDateFmt", header: "Due Date" }
+            ]}
+            metadata={{
+              module: "tasks",
+              appliedFilters: isSearching ? "Custom Search" : "All Tasks",
+              correlationId: crypto.randomUUID(),
+              performedBy: user?.uid || "unknown",
+              performedByName: user?.displayName || user?.email || "Unknown"
+            }}
+            disabled={sortedTasks.length === 0}
+          />
+          <button 
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-750 text-white px-3.5 py-2 rounded-xl font-bold text-xs uppercase transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold text-sm transition-colors shadow-sm"
           >
-            <Plus className="h-4 w-4" /> Create Task
+            <Plus className="h-4 w-4" />
+            <span className="hidden sm:inline">New Task</span>
           </button>
         </div>
       </div>
 
-      {/* ── Filters Chips / Pills ─────────────────────────────────────────── */}
-      <div className="flex gap-2 flex-wrap items-center bg-slate-50/50 dark:bg-slate-900/40 p-2.5 rounded-2xl border border-slate-100 dark:border-slate-800">
-        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest mr-2 ml-1">Filters:</span>
-        {[
-          { id: "all" as const, label: "All Items" },
-          { id: "my-tasks" as const, label: "My Tasks" },
-          { id: "assigned-by-me" as const, label: "Assigned By Me" },
-          { id: "assigned-to-me" as const, label: "Assigned To Me" },
-          { id: "self-tasks" as const, label: "Self Tasks" },
-          { id: "team-tasks" as const, label: "Team Tasks" },
-          { id: "pending" as const, label: "Pending" },
-          { id: "overdue" as const, label: "Overdue" },
-          { id: "critical" as const, label: "Critical" },
-          { id: "completed" as const, label: "Completed" },
-        ].map(filter => (
-          <button
-            key={filter.id}
-            onClick={() => setActiveFilter(filter.id)}
-            className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider border transition-all ${
-              activeFilter === filter.id
-                ? "bg-indigo-650 border-indigo-600 text-white dark:bg-indigo-600"
-                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-800"
-            }`}
-          >
-            {filter.label}
-          </button>
-        ))}
+      <div className="mb-4">
+        <TaskSearchPanel 
+            onSearch={async (params) => {
+              // Default params check
+              if (!params.query && params.status === "all" && params.priority === "all" && params.quickFilter === "all" && !params.dueDateFrom && !params.dueDateTo && params.sortBy === "newest") {
+                setIsSearching(false);
+                setSearchResults([]);
+                return;
+              }
+              setIsSearching(true);
+              try {
+                const res = await searchTasks(params, user?.uid || "", role || "", 500);
+                setSearchResults(res.items);
+              } catch (err) {
+                console.error("Task search failed:", err);
+              }
+            }}
+        />
       </div>
 
       {/* ── Core Workspace Tabs Rendering ──────────────────────────────────── */}

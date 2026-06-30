@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { devLog } from "@/lib/logger";
 import {
   signInWithPopup,
   signInWithRedirect,
@@ -42,11 +43,11 @@ export default function LoginPage() {
   // ── Effect 1: onAuthStateChanged — redirect if already logged in ──
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      console.log("[AUTH] onAuthStateChanged fired. User:", firebaseUser ? firebaseUser.uid : "null");
+      devLog("[AUTH] onAuthStateChanged fired. User:", firebaseUser ? firebaseUser.uid : "null");
       if (firebaseUser) {
         if (!isValidating.current) {
           isValidating.current = true;
-          console.log("[AUTH] Validating user from onAuthStateChanged fallback...");
+          devLog("[AUTH] Validating user from onAuthStateChanged fallback...");
           try {
             await validateUserStatusAndLogin(firebaseUser);
           } catch (err: unknown) {
@@ -61,6 +62,7 @@ export default function LoginPage() {
       }
     });
     return () => unsubscribe();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ── Effect 2: Show session-expired message ──
@@ -75,16 +77,16 @@ export default function LoginPage() {
 
   // ── Effect 3: Handle Google redirect result on page load (fallback only) ──
   useEffect(() => {
-    console.log("[AUTH] Calling getRedirectResult (fallback)...");
+    devLog("[AUTH] Calling getRedirectResult (fallback)...");
     getRedirectResult(auth)
       .then(async (result) => {
-        console.log("[AUTH] getRedirectResult resolved. Result:", result ? "present" : "null");
+        devLog("[AUTH] getRedirectResult resolved. Result:", result ? "present" : "null");
         if (!result) {
           return;
         }
         if (!isValidating.current) {
           isValidating.current = true;
-          console.log("[AUTH] Validating user from getRedirectResult:", result.user.uid);
+          devLog("[AUTH] Validating user from getRedirectResult:", result.user.uid);
           try {
             await validateUserStatusAndLogin(result.user);
           } catch (err: unknown) {
@@ -171,6 +173,8 @@ export default function LoginPage() {
         userData.is_locked === true ||
         userData.is_deleted === true
       ) {
+        console.error("SIGNOUT_TRIGGERED");
+        console.trace();
         await auth.signOut();
         throw new Error("Access Denied: Your account is locked or portal access is disabled. Please contact your administrator.");
       }
@@ -190,6 +194,8 @@ export default function LoginPage() {
           updated_at: new Date()
         });
       } else {
+        console.error("SIGNOUT_TRIGGERED");
+        console.trace();
         await auth.signOut();
         throw new Error("Access Denied: Your email is not registered in the company directory. Please contact your administrator.");
       }

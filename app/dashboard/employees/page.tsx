@@ -5,13 +5,51 @@ import { useAuth } from "../../../components/AuthProvider";
 import { db, auth } from "@/lib/firebase";
 import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
 import { broadcastNotification } from "@/lib/notifications";
-import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, deleteDoc, updateDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, deleteDoc, updateDoc, getDocs, startAfter, getCountFromServer, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import Link from "next/link";
 import Papa from "papaparse";
 import { authenticatedFetch } from "@/lib/api-client";
+import { CreateEmployeeSchema } from "@/lib/validators/employee";
+import { ResetPasswordSchema } from "@/lib/validators/auth";
 import {
-    Users, Search, UserPlus, MoreVertical, Shield, Loader2, CheckCircle2, XCircle, KeyRound, Lock, Unlock, Download, Check, X, BarChart2, GitFork, ClipboardCheck, LayoutGrid, AlertCircle, Mail, Upload, FileText, Trash2, RotateCcw, ArrowLeft, ArrowRight
+    Users, UserPlus, MoreVertical, Shield, Loader2, CheckCircle2, XCircle, KeyRound, Lock, Unlock, Download, Check, X, BarChart2, GitFork, ClipboardCheck, LayoutGrid, AlertCircle, Mail, Upload, FileText, Trash2, RotateCcw, ArrowLeft, ArrowRight
 } from "lucide-react";
+import { ExportMenu } from "@/components/export/ExportMenu";
+
+import { EmployeeSearchPanel } from "@/components/search/EmployeeSearchPanel";
+import { searchEmployees } from "@/lib/search/employee-search";
+
+import { AuditSearchPanel } from "@/components/search/AuditSearchPanel";
+import { searchAuditLogs } from "@/lib/search/audit-search";
+
+/**
+ * Generates a cryptographically-adequate temporary password that
+ * satisfies passwordSchema: min 8 chars, ≥1 uppercase, ≥1 digit.
+ *
+ * Math.random().toString(36) only produces [a-z0-9] — it can NEVER
+ * produce an uppercase letter, so it was always rejected by the Zod
+ * schema added in Phase 5.4. This replaces both broken generators.
+ */
+function generateTempPassword(): string {
+    const upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    const lower = "abcdefghijklmnopqrstuvwxyz";
+    const digits = "0123456789";
+    const all = upper + lower + digits;
+    // Guarantee at least one uppercase and one digit (both required by passwordSchema)
+    const guaranteed =
+        upper[Math.floor(Math.random() * upper.length)] +
+        digits[Math.floor(Math.random() * digits.length)];
+    // Fill remaining 6 chars from the full pool (total length = 8)
+    const rest = Array.from({ length: 6 }, () =>
+        all[Math.floor(Math.random() * all.length)]
+    ).join("");
+    // Shuffle so the guaranteed chars are not always at the front
+    return (guaranteed + rest)
+        .split("")
+        .sort(() => Math.random() - 0.5)
+        .join("");
+}
+
 
 interface ChangeRequest {
     id: string;
@@ -28,13 +66,15 @@ interface ChangeRequest {
 
 interface AuditLogEntry {
     id: string;
-    operator_name: string;
+    operator_name?: string;
+    performedByName?: string;
     action: string;
-    details: string;
+    details?: string;
     ip?: string;
     browser?: string;
     device?: string;
-    timestamp: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    timestamp?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
+    createdAt?: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 interface CreationForm {
@@ -90,21 +130,31 @@ const initialForm = (): CreationForm => ({
 });
 
 export default function EmployeesDashboard() {
-    const { role: currentUserRole, rolesList, hasPermission } = useAuth();
+    const { role: currentUserRole, rolesList, hasPermission, user } = useAuth();
     
     // Core data states
     const [users, setUsers] = useState<AppUserSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
     const [globalAuditLogs, setGlobalAuditLogs] = useState<AuditLogEntry[]>([]);
+
+    // Employee directory pagination states
+    const [usersLimit, setUsersLimit] = useState(50);
+    const [hasMoreUsers, setHasMoreUsers] = useState(true);
+    const [totalUsersCount, setTotalUsersCount] = useState<number | null>(null);
+
+    // Audit logs pagination states
+    const [lastAuditDoc, setLastAuditDoc] = useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+    const [loadingAudit, setLoadingAudit] = useState(false);
+    const [loadingMoreAudit, setLoadingMoreAudit] = useState(false);
+    const [hasMoreAudit, setHasMoreAudit] = useState(true);
+    const [totalAuditCount, setTotalAuditCount] = useState<number | null>(null);
+    
+    const [isSearching, setIsSearching] = useState(false);
+    const [searchResults, setSearchResults] = useState<AppUserSummary[]>([]);
     
     // UI control states
-
     const [activeTab, setActiveTab] = useState<"registry" | "orgchart" | "analytics" | "approvals" | "roles" | "audit">("registry");
-    const [searchTerm, setSearchTerm] = useState("");
-    const [filterRole, setFilterRole] = useState("all");
-    const [filterType, setFilterType] = useState("all");
-    const [filterStatus, setFilterStatus] = useState("all"); // all, active, inactive, archived, locked, portal_enabled, portal_disabled
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     const sortField: keyof AppUserSummary = "name";
@@ -119,8 +169,8 @@ export default function EmployeesDashboard() {
     const [seedingEmployees, setSeedingEmployees] = useState(false);
 
     // Audit logs filters
-    const [auditSearch, setAuditSearch] = useState("");
-    const [auditFilterAction, setAuditFilterAction] = useState("all");
+    const [isAuditSearching, setIsAuditSearching] = useState(false);
+    const [auditSearchResults, setAuditSearchResults] = useState<AuditLogEntry[]>([]);
     
     // Modal controls
     const [showCreateModal, setShowCreateModal] = useState(false);
@@ -172,14 +222,28 @@ export default function EmployeesDashboard() {
         setTimeout(() => setToast(null), 3000);
     };
 
-    // 1. Subscribe to users in real time
+    // 1. Subscribe to users in real time with dynamic limit
+    useEffect(() => {
+        const fetchTotalUsersCount = async () => {
+            try {
+                const coll = collection(db, "users");
+                const countSnap = await getCountFromServer(coll);
+                setTotalUsersCount(countSnap.data().count);
+            } catch (err) {
+                console.error("Error getting users count:", err);
+            }
+        };
+        fetchTotalUsersCount();
+    }, []);
+
     useEffect(() => {
         const unsub = subscribeToAllUsers((data) => {
             setUsers(data);
             setLoading(false);
-        });
+            setHasMoreUsers(data.length === usersLimit);
+        }, usersLimit);
         return () => unsub();
-    }, []);
+    }, [usersLimit]);
 
     // 2. Real-time listener for Change Requests approvals queue
     useEffect(() => {
@@ -194,19 +258,60 @@ export default function EmployeesDashboard() {
         return () => unsub();
     }, [currentUserRole]);
 
-    // 3. Real-time listener for global audit logs (Tab 6)
-    useEffect(() => {
+    // 3. Paginated cursor fetching for global audit logs (Tab 6)
+    const fetchAuditLogs = async (firstPage = false) => {
         if (currentUserRole !== "ceo" && currentUserRole !== "admin" && currentUserRole !== "hr") return;
-        const q = query(collection(db, "audit_logs"), orderBy("timestamp", "desc"), limit(200));
-        const unsub = onSnapshot(q, (snap) => {
+        
+        if (firstPage) {
+            setLoadingAudit(true);
+            setGlobalAuditLogs([]);
+            setLastAuditDoc(null);
+            setHasMoreAudit(true);
+            
+            // Fetch total count once for this filter (cached)
+            try {
+                const coll = collection(db, "audit_logs");
+                const countQ = query(coll);
+                const countSnap = await getCountFromServer(countQ);
+                setTotalAuditCount(countSnap.data().count);
+            } catch (err) {
+                console.error("Error getting audit logs count:", err);
+            }
+        } else {
+            setLoadingMoreAudit(true);
+        }
+
+        try {
+            const coll = collection(db, "audit_logs");
+            let q = query(coll, orderBy("timestamp", "desc"), limit(25));
+
+            if (!firstPage && lastAuditDoc) {
+                q = query(q, startAfter(lastAuditDoc));
+            }
+
+            const snap = await getDocs(q);
             const list = snap.docs.map(d => ({
                 id: d.id,
                 ...d.data()
             } as unknown as AuditLogEntry));
-            setGlobalAuditLogs(list);
-        });
-        return () => unsub();
-    }, [currentUserRole]);
+
+            setGlobalAuditLogs(prev => firstPage ? list : [...prev, ...list]);
+            setLastAuditDoc(snap.docs.length > 0 ? snap.docs[snap.docs.length - 1] : null);
+            setHasMoreAudit(snap.docs.length === 25);
+        } catch (error) {
+            console.error("Error fetching audit logs:", error);
+        } finally {
+            setLoadingAudit(false);
+            setLoadingMoreAudit(false);
+        }
+    };
+
+    useEffect(() => {
+        if (activeTab === "audit") {
+            fetchAuditLogs(true);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab]);
 
     // Handle clicks outside of dropdown menu
     useEffect(() => {
@@ -237,8 +342,8 @@ export default function EmployeesDashboard() {
             }
             if (!form.mobile) {
                 errors.mobile = "Mobile number is required.";
-            } else if (!/^\+?[0-9\s-]{10,15}$/.test(form.mobile)) {
-                errors.mobile = "Mobile number must be between 10 and 15 digits.";
+            } else if (!/^(\+91[-\s]?)?[6-9]\d{9}$/.test(form.mobile.replace(/[\s-]/g, ''))) {
+                errors.mobile = "Must be a 10-digit Indian mobile number.";
             }
             if (form.profile_photo && !/^https?:\/\/.+/.test(form.profile_photo)) {
                 errors.profile_photo = "Profile Photo must be a valid URL.";
@@ -310,8 +415,8 @@ export default function EmployeesDashboard() {
         } else if (fieldName === "mobile") {
             if (!value) {
                 errorMsg = "Mobile number is required.";
-            } else if (!/^\+?[0-9\s-]{10,15}$/.test(value)) {
-                errorMsg = "Mobile number must be between 10 and 15 digits.";
+            } else if (!/^(\+91[-\s]?)?[6-9]\d{9}$/.test(value.replace(/[\s-]/g, ''))) {
+                errorMsg = "Must be a 10-digit Indian mobile number.";
             }
         } else if (fieldName === "designation") {
             if (!value || value.trim().length < 2) {
@@ -357,7 +462,7 @@ export default function EmployeesDashboard() {
         if (step === 1) {
             if (!form.name || form.name.trim().length < 3) return false;
             if (!form.email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return false;
-            if (!form.mobile || !/^\+?[0-9\s-]{10,15}$/.test(form.mobile)) return false;
+            if (!form.mobile || !/^(\+91[-\s]?)?[6-9]\d{9}$/.test(form.mobile.replace(/[\s-]/g, ''))) return false;
             const dupEmail = users.some(u => u.email?.toLowerCase() === form.email.toLowerCase() && !u.is_deleted);
             if (dupEmail) return false;
             if (form.profile_photo && !/^https?:\/\/.+/.test(form.profile_photo)) return false;
@@ -387,7 +492,7 @@ export default function EmployeesDashboard() {
         }
         setSubmitting(true);
         try {
-            const tempPasswordStr = Math.random().toString(36).slice(-8) + "!";
+            const tempPasswordStr = generateTempPassword();
             const generatedEmpId = "EMP-" + Math.floor(1000 + Math.random() * 9000);
             const finalEmployeeId = manualIdOverride && customEmployeeId ? customEmployeeId : generatedEmpId;
 
@@ -396,6 +501,15 @@ export default function EmployeesDashboard() {
                 password: tempPasswordStr,
                 employee_id: finalEmployeeId
             };
+
+            // Final Zod client-side validation before API call
+            const zodResult = CreateEmployeeSchema.safeParse(payload);
+            if (!zodResult.success) {
+                const firstError = zodResult.error.issues[0];
+                showToast(firstError?.message || "Validation failed. Please check all fields.", "error");
+                setSubmitting(false);
+                return;
+            }
 
             const response = await authenticatedFetch("/api/admin/create-employee", {
                 method: "POST",
@@ -478,7 +592,7 @@ export default function EmployeesDashboard() {
             if (dupEmail) errors.email = "This email is already in use.";
         }
         
-        if (!editForm.mobile || !/^\+?[0-9\s-]{10,15}$/.test(editForm.mobile)) errors.mobile = "Valid mobile is required.";
+        if (!editForm.mobile || !/^(\+91[-\s]?)?[6-9]\d{9}$/.test(editForm.mobile.replace(/[\s-]/g, ''))) errors.mobile = "Valid 10-digit Indian mobile is required.";
         if (!editForm.department || editForm.department.trim().length < 2) errors.department = "Department is required.";
         if (!editForm.designation || editForm.designation.trim().length < 2) errors.designation = "Designation is required.";
         
@@ -573,6 +687,17 @@ export default function EmployeesDashboard() {
     const handleResetPasswordSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!showResetPasswordModal || !tempPassword) return;
+
+        // Zod client-side validation: enforce new password policy (8+ chars, uppercase, number)
+        const zodResult = ResetPasswordSchema.safeParse({
+            uid: showResetPasswordModal.uid,
+            password: tempPassword,
+        });
+        if (!zodResult.success) {
+            showToast(zodResult.error.issues[0]?.message || "Password does not meet requirements.", "error");
+            return;
+        }
+
         setResettingPassword(true);
         try {
             const response = await authenticatedFetch("/api/admin/reset-password", {
@@ -701,7 +826,7 @@ export default function EmployeesDashboard() {
                 let successCount = 0;
                 for (const emp of validEmployees) {
                     try {
-                        const tempPass = Math.random().toString(36).slice(-8) + "!";
+                        const tempPass = generateTempPassword();
                         const response = await authenticatedFetch("/api/admin/create-employee", {
                             method: "POST",
                             body: JSON.stringify({ ...emp, password: tempPass })
@@ -763,7 +888,9 @@ export default function EmployeesDashboard() {
                     action: "role_create",
                     target_id: roleId,
                     target_name: newRoleName,
-                    details: `Created new custom role: ${newRoleName} (${roleId})`
+                    details: `Created new custom role: ${newRoleName} (${roleId})`,
+                    before: {},
+                    after: { name: newRoleName, is_system: false, permissions: { view_employees: true } }
                 })
             }).catch(() => {});
 
@@ -800,7 +927,9 @@ export default function EmployeesDashboard() {
                     action: "permission_change",
                     target_id: roleId,
                     target_name: roleData.name || roleId,
-                    details: `Updated permission '${permissionKey}' for role '${roleData.name || roleId}' to ${!currentValue}`
+                    details: `Updated permission '${permissionKey}' for role '${roleData.name || roleId}' to ${!currentValue}`,
+                    before: { [permissionKey]: currentValue },
+                    after: { [permissionKey]: !currentValue }
                 })
             }).catch(() => {});
 
@@ -860,7 +989,7 @@ export default function EmployeesDashboard() {
                     email,
                     password: tempPass,
                     name,
-                    mobile: `+1 555-01${index.toString().padStart(2, '0')}`,
+                    mobile: `+91 98765${index.toString().padStart(5, '0')}`,
                     role: roleRand,
                     reporting_manager_id: managerId,
                     department: dept,
@@ -877,7 +1006,7 @@ export default function EmployeesDashboard() {
                     emergency_contact: {
                         name: `Emergency Contact ${index}`,
                         relationship: index % 3 === 0 ? "Spouse" : "Parent",
-                        mobile: `+1 555-02${index.toString().padStart(2, '0')}`
+                        mobile: `+91 98765${index.toString().padStart(5, '0')}`
                     },
                     profile_photo: `https://images.unsplash.com/photo-${1500000000000 + index * 1000}?w=150&h=150&fit=crop&crop=face`,
                     gender: index % 2 === 0 ? "male" : "female",
@@ -1052,35 +1181,7 @@ export default function EmployeesDashboard() {
     const uniqueDepartments = new Set(activeNonDeletedUsers.filter(u => u.department).map(u => u.department?.trim().toLowerCase())).size;
 
     // Filter Logic
-    const filteredUsers = users.filter(u => {
-        // Soft delete / archive gate
-        const isDeleted = !!u.is_deleted || u.status === "archived";
-        
-        if (filterStatus === "archived") {
-            if (!isDeleted) return false;
-        } else {
-            if (isDeleted) return false;
-        }
-
-        const matchesSearch = 
-            (u.email?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-            (u.name?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-            (u.employee_id?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-            (u.department?.toLowerCase() || "").includes(searchTerm.toLowerCase()) ||
-            (u.designation?.toLowerCase() || "").includes(searchTerm.toLowerCase());
-
-        const matchesRole = filterRole === "all" || u.role === filterRole;
-        const matchesType = filterType === "all" || u.employee_type === filterType;
-        
-        let matchesStatus = true;
-        if (filterStatus === "active") matchesStatus = !!u.is_active && !u.is_locked;
-        if (filterStatus === "inactive") matchesStatus = !u.is_active && !u.is_locked;
-        if (filterStatus === "locked") matchesStatus = !!u.is_locked;
-        if (filterStatus === "portal_enabled") matchesStatus = u.portal_access !== false;
-        if (filterStatus === "portal_disabled") matchesStatus = u.portal_access === false;
-
-        return matchesSearch && matchesRole && matchesStatus && matchesType;
-    });
+    const filteredUsers = isSearching ? searchResults : users.filter(u => !u.is_deleted);
 
     // Sorting Logic
     const sortedUsers = [...filteredUsers].sort((a, b) => {
@@ -1145,15 +1246,7 @@ export default function EmployeesDashboard() {
     const directReports = activeManagerObj ? users.filter(u => u.reporting_manager_id === activeManagerObj.uid && !u.is_deleted) : [];
 
     // Filter audit logs
-    const filteredAuditLogs = globalAuditLogs.filter(log => {
-        const matchesSearch = 
-            (log.operator_name || "").toLowerCase().includes(auditSearch.toLowerCase()) ||
-            (log.details || "").toLowerCase().includes(auditSearch.toLowerCase()) ||
-            (log.action || "").toLowerCase().includes(auditSearch.toLowerCase());
-        
-        const matchesAction = auditFilterAction === "all" || log.action === auditFilterAction;
-        return matchesSearch && matchesAction;
-    });
+    const filteredAuditLogs = isAuditSearching ? auditSearchResults : globalAuditLogs;
 
     const rolesAvailable = rolesList.map(r => r.id);
 
@@ -1318,53 +1411,56 @@ export default function EmployeesDashboard() {
                     </div>
 
                     {/* Filter and Search Box */}
-                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex flex-col lg:flex-row gap-4 justify-between items-center">
-                        <div className="relative w-full lg:max-w-md">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                            <input 
-                                type="text"
-                                placeholder="Search by ID, name, email, department, designation..."
-                                value={searchTerm}
-                                onChange={e => setSearchTerm(e.target.value)}
-                                className="w-full pl-11 pr-5 py-3 rounded-2xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/30 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all font-semibold"
+                    <div className="mb-4 space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Directory Options</h2>
+                            <ExportMenu 
+                                data={paginatedUsers.map(u => ({
+                                    ...u,
+                                    joining_date: typeof u.joining_date === 'string' ? u.joining_date : ((u.joining_date as unknown as { toDate(): Date } | null)?.toDate?.()?.toLocaleDateString() ?? "N/A"),
+                                    last_login: typeof (u as unknown as Record<string, unknown>).last_login === 'string' ? String((u as unknown as Record<string, unknown>).last_login) : (((u as unknown as Record<string, unknown>).last_login as unknown as { toDate(): Date } | null)?.toDate?.()?.toLocaleString() ?? "N/A")
+                                })) as Record<string, unknown>[]} 
+                                columns={[
+                                    { key: "name", header: "Name" },
+                                    { key: "employee_id", header: "Employee ID" },
+                                    { key: "email", header: "Email" },
+                                    { key: "department", header: "Department" },
+                                    { key: "role", header: "Role" },
+                                    { key: "status", header: "Status" },
+                                    { key: "employee_type", header: "Employee Type" },
+                                    { key: "joining_date", header: "Joining Date" },
+                                    { key: "mobile", header: "Mobile" },
+                                    { key: "last_login", header: "Last Login" }
+                                ]}
+                                metadata={{
+                                    module: "employees",
+                                    appliedFilters: isSearching ? "Custom Search" : "All (Directory)",
+                                    correlationId: crypto.randomUUID(),
+                                    performedBy: user?.uid || "unknown",
+                                    performedByName: user?.displayName || user?.email || "Unknown"
+                                }}
+                                disabled={paginatedUsers.length === 0}
                             />
                         </div>
-
-                        <div className="flex flex-wrap gap-3 w-full lg:w-auto items-center justify-end">
-                            <select 
-                                value={filterRole} 
-                                onChange={e => setFilterRole(e.target.value)}
-                                className="px-4 py-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs font-bold capitalize focus:outline-none text-slate-600 dark:text-slate-350"
-                            >
-                                <option value="all">All Roles</option>
-                                {rolesAvailable.map(r => <option key={r} value={r}>{r}</option>)}
-                            </select>
-
-                            <select 
-                                value={filterType} 
-                                onChange={e => setFilterType(e.target.value)}
-                                className="px-4 py-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs font-bold capitalize focus:outline-none text-slate-600 dark:text-slate-355"
-                            >
-                                <option value="all">All Types</option>
-                                <option value="permanent">Permanent</option>
-                                <option value="contract">Contract</option>
-                                <option value="intern">Intern</option>
-                            </select>
-
-                            <select 
-                                value={filterStatus} 
-                                onChange={e => setFilterStatus(e.target.value)}
-                                className="px-4 py-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs font-bold capitalize focus:outline-none text-slate-600 dark:text-slate-360"
-                            >
-                                <option value="all">Active Directory</option>
-                                <option value="active">Status: Active</option>
-                                <option value="inactive">Status: Inactive</option>
-                                <option value="archived">Archived / Removed</option>
-                                <option value="locked">Suspended / Locked</option>
-                                <option value="portal_enabled">Portal Access: ON</option>
-                                <option value="portal_disabled">Portal Access: OFF</option>
-                            </select>
-                        </div>
+                        <EmployeeSearchPanel 
+                            onSearch={async (params) => {
+                                // Default params check - fallback to realtime directory
+                                if (!params.query && params.role === "all" && params.status === "all" && params.department === "all" && params.employeeType === "all" && params.portalAccess === "all") {
+                                    setIsSearching(false);
+                                    setSearchResults([]);
+                                    return;
+                                }
+                                setIsSearching(true);
+                                try {
+                                    // Fetch up to 500 results for client-side pagination
+                                    const result = await searchEmployees(params, 500);
+                                    setSearchResults(result.items);
+                                    setCurrentPage(1); // Reset to first page on new search
+                                } catch (error) {
+                                    console.error("Employee search failed:", error);
+                                }
+                            }} 
+                        />
                     </div>
 
                     {/* Table View */}
@@ -1424,7 +1520,7 @@ export default function EmployeesDashboard() {
                                                             <span className="inline-flex items-center justify-center w-24 py-1 rounded-full text-[9px] font-black uppercase bg-rose-500/10 text-rose-500 border border-rose-500/20">Archived</span>
                                                         ) : (
                                                             <>
-                                                                <span className={`inline-flex items-center justify-center w-24 py-1 rounded-full text-[9px] font-black uppercase border ${u.is_active ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
+                                                                <span className={`inline-flex items-center justify-center w-24 py-1 rounded-full text-[9px] font-black uppercase border ${u.is_active ? 'bg-emerald-500/10 text-emerald-500' : 'bg-amber-500/10 text-amber-500 border-amber-500/20'}`}>
                                                                     {u.is_active ? 'Active' : 'Inactive'}
                                                                 </span>
                                                                 {u.is_locked && (
@@ -1546,27 +1642,40 @@ export default function EmployeesDashboard() {
                         </div>
 
                         {/* Pagination Footer */}
-                        {totalPages > 1 && (
-                            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/5">
-                                <span className="text-xs text-slate-400 font-bold">Page {currentPage} of {totalPages} ({filteredUsers.length} employees)</span>
-                                <div className="flex gap-2">
+                        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 dark:bg-slate-800/5 gap-4">
+                            <span className="text-xs text-slate-400 font-bold">
+                                Showing {filteredUsers.length} of {totalUsersCount ?? "..."} employees
+                                {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                {totalPages > 1 && (
+                                    <div className="flex gap-2">
+                                        <button 
+                                            disabled={currentPage === 1} 
+                                            onClick={() => setCurrentPage(c => c - 1)}
+                                            className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
+                                        >
+                                            Prev
+                                        </button>
+                                        <button 
+                                            disabled={currentPage === totalPages} 
+                                            onClick={() => setCurrentPage(c => c + 1)}
+                                            className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
+                                )}
+                                {hasMoreUsers && (
                                     <button 
-                                        disabled={currentPage === 1} 
-                                        onClick={() => setCurrentPage(c => c - 1)}
-                                        className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
+                                        onClick={() => setUsersLimit(prev => prev + 50)}
+                                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm"
                                     >
-                                        Prev
+                                        Load More
                                     </button>
-                                    <button 
-                                        disabled={currentPage === totalPages} 
-                                        onClick={() => setCurrentPage(c => c + 1)}
-                                        className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
-                                    >
-                                        Next
-                                    </button>
-                                </div>
+                                )}
                             </div>
-                        )}
+                        </div>
                     </div>
                 </div>
             )}
@@ -1997,32 +2106,54 @@ export default function EmployeesDashboard() {
                     </div>
 
                     {/* Filters bar */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                        <div className="relative w-full sm:max-w-xs">
-                            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                            <input 
-                                type="text"
-                                placeholder="Search logs..."
-                                value={auditSearch}
-                                onChange={e => setAuditSearch(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/40 text-xs font-semibold focus:outline-none"
+                    <div className="mb-4 space-y-4">
+                        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
+                            <h4 className="font-semibold text-slate-800 dark:text-white">Audit Export</h4>
+                            <ExportMenu 
+                                data={globalAuditLogs.map(log => ({
+                                    ...log,
+                                    createdAt: typeof log.createdAt === 'string' ? log.createdAt : (((log.createdAt as { toDate(): Date } | null)?.toDate?.()?.toLocaleString()) ?? ((log.timestamp as { toDate(): Date } | null)?.toDate?.()?.toLocaleString()) ?? "N/A")
+                                })) as Record<string, unknown>[]} 
+                                columns={[
+                                    { key: "action", header: "Action" },
+                                    { key: "targetId", header: "Target ID" },
+                                    { key: "severity", header: "Severity" },
+                                    { key: "createdAt", header: "Created At" },
+                                    { key: "details", header: "Details" }
+                                ]}
+                                metadata={{
+                                    module: "audit_logs",
+                                    appliedFilters: isAuditSearching ? "Custom Search" : "All",
+                                    correlationId: crypto.randomUUID(),
+                                    performedBy: user?.uid || "unknown",
+                                    performedByName: user?.displayName || user?.email || "Unknown"
+                                }}
+                                disabled={globalAuditLogs.length === 0}
                             />
                         </div>
-
-                        <select 
-                            value={auditFilterAction}
-                            onChange={e => setAuditFilterAction(e.target.value)}
-                            className="px-3 py-2 rounded-lg border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs font-bold text-slate-600 dark:text-slate-350"
-                        >
-                            <option value="all">All Action Events</option>
-                            <option value="create">Created Employee</option>
-                            <option value="update">Updated Profiles</option>
-                            <option value="delete">Archived Records</option>
-                            <option value="reactivate">Restored / Reactivated</option>
-                            <option value="toggle_status">Toggle Status Locks</option>
-                            <option value="login">Portal Logins</option>
-                            <option value="logout">Portal Logouts</option>
-                        </select>
+                        <AuditSearchPanel 
+                            onSearch={async (params) => {
+                                // Default params check - fallback to realtime directory
+                                if (!params.query && params.action === "all" && params.severity === "all" && params.performedBy === "all" && params.datePreset === "all") {
+                                    setIsAuditSearching(false);
+                                    setAuditSearchResults([]);
+                                    return;
+                                }
+                                setIsAuditSearching(true);
+                                try {
+                                    const result = await searchAuditLogs(params, 100);
+                                    // Map to local AuditLogEntry format
+                                    setAuditSearchResults(result.items.map(i => ({
+                                        ...i,
+                                        operator_name: i.performedByName || "System",
+                                        action: i.action,
+                                        details: i.details || ""
+                                    })));
+                                } catch (error) {
+                                    console.error("Audit search failed:", error);
+                                }
+                            }}
+                        />
                     </div>
 
                     {/* Logs Table */}
@@ -2038,7 +2169,16 @@ export default function EmployeesDashboard() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-semibold text-slate-750 dark:text-slate-300">
-                                {filteredAuditLogs.length === 0 ? (
+                                {loadingAudit ? (
+                                    <tr>
+                                        <td colSpan={5} className="px-6 py-10 text-center">
+                                            <div className="flex justify-center items-center gap-2 text-slate-500 font-bold">
+                                                <Loader2 className="h-4 w-4 animate-spin text-indigo-600" />
+                                                Loading security logs...
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ) : filteredAuditLogs.length === 0 ? (
                                     <tr>
                                         <td colSpan={5} className="px-6 py-10 text-center text-slate-450 font-bold">No security events found matching query.</td>
                                     </tr>
@@ -2066,6 +2206,29 @@ export default function EmployeesDashboard() {
                                 )}
                             </tbody>
                         </table>
+                    </div>
+
+                    {/* Pagination Footer */}
+                    <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-between items-center bg-slate-50/50 dark:bg-slate-800/5 rounded-2xl">
+                        <span className="text-xs text-slate-400 font-bold">
+                            Showing {globalAuditLogs.length} of {totalAuditCount ?? "..."} events
+                        </span>
+                        {hasMoreAudit && (
+                            <button 
+                                disabled={loadingMoreAudit}
+                                onClick={() => fetchAuditLogs(false)}
+                                className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5"
+                            >
+                                {loadingMoreAudit ? (
+                                    <>
+                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                        Loading...
+                                    </>
+                                ) : (
+                                    "Load More"
+                                )}
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

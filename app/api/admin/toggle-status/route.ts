@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { ToggleStatusSchema } from '@/lib/validators/auth';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,13 +23,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can manage user access' }, { status: 403 });
         }
 
-        // 2. Parse body fields
+        // 2. Parse and validate body fields
         const body = await request.json();
-        const { uid, is_active, portal_access, is_locked } = body;
-
-        if (!uid) {
-            return NextResponse.json({ error: 'Missing required field: uid' }, { status: 400 });
-        }
+        const validation = parseOrError(ToggleStatusSchema, body);
+        if ('response' in validation) return validation.response;
+        const { uid, is_active, portal_access, is_locked } = validation.data;
 
         // 3. Fetch current employee data for validation and logging
         const docRef = adminDb.collection('users').doc(uid);
@@ -87,18 +88,38 @@ export async function POST(request: NextRequest) {
         }
 
         // 6. Write to Audit Logs
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Admin',
-            action: 'toggle_status',
-            target_id: uid,
-            target_name: targetData.name || 'Unknown',
+        const before: Record<string, unknown> = {};
+        const after: Record<string, unknown> = {};
+        if (is_active !== undefined) {
+            before.is_active = targetData.is_active ?? true;
+            after.is_active = is_active;
+        }
+        if (portal_access !== undefined) {
+            before.portal_access = targetData.portal_access ?? true;
+            after.portal_access = portal_access;
+        }
+        if (is_locked !== undefined) {
+            before.is_locked = targetData.is_locked ?? false;
+            after.is_locked = is_locked;
+        }
+
+        await logActivityServer({
+            action: "employee_updated",
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Admin',
+            targetId: uid,
+            targetType: "user",
             details: `Toggled access status parameters: ${changes.join(', ')}.`,
+            correlationId: user.correlationId,
+            metadata: {
+                before,
+                after,
+                changes
+            },
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

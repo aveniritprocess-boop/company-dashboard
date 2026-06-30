@@ -15,16 +15,7 @@ import {
 import { db } from "@/lib/firebase";
 import { useAuth } from "./AuthProvider";
 import { Trash2, Plus, CheckCircle2 } from "lucide-react";
-
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: "pending" | "in-progress" | "completed";
-  priority: "low" | "medium" | "high";
-  dueDate: string;
-  createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
-}
+import { Task, TaskStatus } from "@/lib/tasks";
 
 interface TaskManagerProps {
   context?: 'personal' | 'team' | 'project';
@@ -122,7 +113,7 @@ export function TaskManager({ context = 'personal', contextId }: TaskManagerProp
     }
   };
 
-  const updateStatus = async (id: string, newStatus: "pending" | "in-progress" | "completed") => {
+  const updateStatus = async (id: string, newStatus: TaskStatus) => {
     const path = getCollectionPath();
     if (!user || !path) return;
     try {
@@ -148,15 +139,16 @@ export function TaskManager({ context = 'personal', contextId }: TaskManagerProp
     }
   };
 
-  const priorityColor = {
+  const priorityColor: Record<string, string> = {
     low: "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300",
     medium: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
     high: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+    critical: "bg-red-200 text-red-900 dark:bg-red-950 dark:text-red-200 font-bold border border-red-300",
   };
 
-  const statusColor = {
+  const statusColor: Record<string, string> = {
     pending: "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300",
-    "in-progress": "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
+    in_progress: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300",
     completed: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
   }
 
@@ -276,7 +268,7 @@ export function TaskManager({ context = 'personal', contextId }: TaskManagerProp
               {tasks.map((task) => (
                 <tr key={task.id}>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[task.status]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${statusColor[task.status] || "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"}`}>
                       {task.status}
                     </span>
                   </td>
@@ -285,7 +277,7 @@ export function TaskManager({ context = 'personal', contextId }: TaskManagerProp
                     <div className="text-sm text-gray-500 dark:text-gray-400">{task.description}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityColor[task.priority]}`}>
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${priorityColor[task.priority] || "bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300"}`}>
                       {task.priority}
                     </span>
                   </td>

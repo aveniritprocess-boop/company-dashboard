@@ -33,28 +33,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [rolesList, setRolesList] = useState<{ id: string; name: string; permissions: Record<string, boolean>; is_system?: boolean }[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // 1. Subscribe to the roles collection in real time
-    useEffect(() => {
-        const unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
-            const list = snap.docs.map(d => ({
-                id: d.id,
-                name: d.data().name || d.id,
-                permissions: d.data().permissions || {},
-                is_system: !!d.data().is_system
-            }));
-            setRolesList(list);
-        });
-        return () => unsubRoles();
-    }, []);
-
-    // 2. Auth State Changed Listener
+    // Auth State Changed Listener
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
 
             if (firebaseUser) {
                 // Initialize default roles in database
-                initializeRolesAndPermissions(db);
+                if (typeof window !== "undefined") {
+                    const initialized = sessionStorage.getItem("roles_initialized");
+                    const initializing = sessionStorage.getItem("roles_initializing");
+
+                    if (!initialized && !initializing) {
+                        sessionStorage.setItem("roles_initializing", "true");
+                        initializeRolesAndPermissions(db)
+                            .then(() => {
+                                sessionStorage.setItem("roles_initialized", "true");
+                            })
+                            .catch((err: unknown) => {
+                                console.error("Failed to seed default roles and permissions:", err);
+                                sessionStorage.removeItem("roles_initialized");
+                            })
+                            .finally(() => {
+                                sessionStorage.removeItem("roles_initializing");
+                            });
+                    }
+                }
+
+                // Subscribe to the roles collection in real time
+                const unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
+                    const list = snap.docs.map(d => ({
+                        id: d.id,
+                        name: d.data().name || d.id,
+                        permissions: d.data().permissions || {},
+                        is_system: !!d.data().is_system
+                    }));
+                    setRolesList(list);
+                });
 
                 // Subscribe to user document for live status and role
                 const unsubDoc = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
@@ -63,6 +78,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         
                         // Enforce deactivation, locked status, and portal access disabled
                         if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
+                            console.error("SIGNOUT_TRIGGERED");
+                            console.trace();
                             auth.signOut();
                             document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
                             setRole(null);
@@ -83,7 +100,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     setLoading(false);
                 });
 
-                return () => unsubDoc();
+                return () => {
+                    unsubRoles();
+                    unsubDoc();
+                };
             } else {
                 setRole(null);
                 setMustChangePassword(false);
@@ -94,7 +114,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return () => unsubscribe();
     }, []);
 
-    // 3. Compute permissions matrix when role or rolesList changes
+    // Compute permissions matrix when role or rolesList changes
     const permissions = useMemo<Record<string, boolean>>(() => {
         if (!role || rolesList.length === 0) {
             return {};
@@ -129,7 +149,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return match ? (match.permissions || {}) : {};
     }, [role, rolesList]);
 
-    // 4. Update last login timestamp in the background
+    // Update last login timestamp in the background
     useEffect(() => {
         if (user) {
             updateDoc(doc(db, "users", user.uid), {

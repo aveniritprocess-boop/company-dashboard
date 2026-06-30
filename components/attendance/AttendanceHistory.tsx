@@ -5,6 +5,12 @@ import { getSessionHistory, AttendanceSession } from "@/lib/attendance";
 import { useAuth } from "@/components/AuthProvider";
 import { format, differenceInSeconds } from "date-fns";
 import { Loader2 } from "lucide-react";
+import { ExportMenu } from "@/components/export/ExportMenu";
+
+/** Minimal shape of a Firestore Timestamp — avoids importing the full SDK type */
+interface FirestoreTimestamp {
+  toDate(): Date;
+}
 
 export function AttendanceHistory() {
   const { user } = useAuth();
@@ -44,8 +50,31 @@ export function AttendanceHistory() {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-start sm:items-center">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session History</h3>
+        <ExportMenu 
+            data={history.map(s => ({
+              ...s,
+              dateFmt: format((s.clockInAt as FirestoreTimestamp).toDate(), "MMM d, yyyy"),
+              clockIn: format((s.clockInAt as FirestoreTimestamp).toDate(), "h:mm a"),
+              clockOut: s.clockOutAt ? format((s.clockOutAt as FirestoreTimestamp).toDate(), "h:mm a") : "Active",
+              duration: formatDuration((s.clockInAt as FirestoreTimestamp).toDate(), s.clockOutAt ? (s.clockOutAt as FirestoreTimestamp).toDate() : null)
+            })) as Record<string, unknown>[]}
+            columns={[
+              { key: "dateFmt", header: "Date" },
+              { key: "clockIn", header: "Clock In" },
+              { key: "clockOut", header: "Clock Out" },
+              { key: "duration", header: "Total Hours" }
+            ]}
+            metadata={{
+              module: "attendance",
+              appliedFilters: "All History",
+              correlationId: crypto.randomUUID(),
+              performedBy: user?.uid || "unknown",
+              performedByName: user?.displayName || user?.email || "Unknown"
+            }}
+            disabled={history.length === 0}
+        />
       </div>
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">

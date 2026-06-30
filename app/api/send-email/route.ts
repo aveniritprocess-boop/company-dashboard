@@ -1,7 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyFirebaseToken } from "@/lib/auth-middleware";
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const userOrError = await verifyFirebaseToken(request);
+    if ('error' in userOrError) {
+      return NextResponse.json({ error: userOrError.error }, { status: userOrError.status });
+    }
+
     const { to, subject, html, text } = await request.json();
 
     const user = process.env.GMAIL_USER; // avenir.itprocess@gmail.com

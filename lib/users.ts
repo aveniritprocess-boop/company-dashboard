@@ -1,4 +1,4 @@
-import { collection, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, doc, getDoc, DocumentData, query, limit, orderBy } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export interface AppUserSummary {
@@ -38,47 +38,9 @@ export interface AppUserSummary {
     is_deleted?: boolean;
 }
 
-export async function getAllUsers(): Promise<AppUserSummary[]> {
-    const snap = await getDocs(collection(db, "users"));
-    return snap.docs.map((d) => {
-        const data = d.data();
-        return {
-            uid: d.id,
-            name: data.name ?? data.displayName ?? null,
-            email: data.email ?? null,
-            role: data.role ?? "employee",
-            mobile: data.mobile,
-            reporting_manager_id: data.reporting_manager_id,
-            department: data.department,
-            location: data.location,
-            employee_id: data.employee_id,
-            is_active: data.is_active ?? true,
-            must_change_password: data.must_change_password ?? false,
-            designation: data.designation,
-            joining_date: data.joining_date,
-            employee_type: data.employee_type,
-            address: data.address,
-            emergency_contact: data.emergency_contact,
-            profile_photo: data.profile_photo,
-            gender: data.gender || "prefer-not-to-say",
-            status: data.status || (data.is_active === false ? "inactive" : "active"),
-            exit_details: data.exit_details,
-            created_at: data.created_at || data.createdAt,
-            updated_at: data.updated_at || data.updatedAt,
-            portal_access: data.portal_access ?? true,
-            is_locked: data.is_locked ?? false,
-            is_deleted: data.is_deleted ?? false,
-        };
-    });
-}
-
-export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void): () => void {
-  const collectionRef = collection(db, "users");
-  return onSnapshot(collectionRef, (snapshot) => {
-    const users = snapshot.docs.map((d) => {
-      const data = d.data();
-      return {
-        uid: d.id,
+function mapDocToUser(uid: string, data: DocumentData): AppUserSummary {
+    return {
+        uid,
         name: data.name ?? data.displayName ?? null,
         email: data.email ?? null,
         role: data.role ?? "employee",
@@ -103,29 +65,59 @@ export function subscribeToAllUsers(callback: (users: AppUserSummary[]) => void)
         portal_access: data.portal_access ?? true,
         is_locked: data.is_locked ?? false,
         is_deleted: data.is_deleted ?? false,
-      };
+    };
+}
+
+import { monitorQuery, trackListener } from "./firestore-monitor";
+
+export async function getAllUsers(limitCount?: number): Promise<AppUserSummary[]> {
+    return monitorQuery("getAllUsers", "users", async () => {
+        let q = query(collection(db, "users"), orderBy("name", "asc"));
+        if (limitCount) {
+            q = query(q, limit(limitCount));
+        }
+        const snap = await getDocs(q);
+        return snap.docs.map((d) => mapDocToUser(d.id, d.data()));
     });
+}
+
+export function subscribeToAllUsers(
+  callback: (users: AppUserSummary[]) => void,
+  limitCount?: number
+): () => void {
+  const cleanupMonitor = trackListener("subscribeToAllUsers");
+  const collectionRef = collection(db, "users");
+  let q = query(collectionRef, orderBy("name", "asc"));
+  if (limitCount) {
+    q = query(q, limit(limitCount));
+  }
+  const unsub = onSnapshot(q, (snapshot) => {
+    const users = snapshot.docs.map((d) => mapDocToUser(d.id, d.data()));
     callback(users);
   });
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 export async function getUserById(uid: string): Promise<AppUserSummary | null> {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (!userDoc.exists()) return null;
-    const data = userDoc.data();
+    const mapped = mapDocToUser(userDoc.id, userDoc.data());
     return {
-        uid: userDoc.id,
-        name: data.name ?? data.displayName ?? null,
-        email: data.email ?? null,
-        role: data.role ?? "employee",
-        mobile: data.mobile,
-        reporting_manager_id: data.reporting_manager_id,
-        department: data.department,
-        location: data.location,
-        employee_id: data.employee_id,
-        is_active: data.is_active ?? true,
-        must_change_password: data.must_change_password ?? false,
-        created_at: data.created_at || data.createdAt,
-        updated_at: data.updated_at || data.updatedAt,
+        uid: mapped.uid,
+        name: mapped.name,
+        email: mapped.email,
+        role: mapped.role,
+        mobile: mapped.mobile,
+        reporting_manager_id: mapped.reporting_manager_id,
+        department: mapped.department,
+        location: mapped.location,
+        employee_id: mapped.employee_id,
+        is_active: mapped.is_active,
+        must_change_password: mapped.must_change_password,
+        created_at: mapped.created_at,
+        updated_at: mapped.updated_at,
     };
 }

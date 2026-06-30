@@ -6,7 +6,11 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:rules": "vitest run tests/firestore.rules.test.ts",
+    "test:security": "firebase emulators:exec --project avenir-portal-rules-test \"npm run test:rules\"",
+    "archive:audit-logs": "npx ts-node --project tsconfig.json scripts/archive-audit-logs.ts",
+    "archive:audit-logs:dry": "npx ts-node --project tsconfig.json scripts/archive-audit-logs.ts -- --dry-run"
   },
   "dependencies": {
     "@types/nodemailer": "^8.0.0",
@@ -16,6 +20,8 @@
     "dotenv": "^17.3.1",
     "firebase": "^12.8.0",
     "firebase-admin": "^13.7.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.563.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
@@ -23,9 +29,12 @@
     "papaparse": "^5.5.3",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "recharts": "^3.7.0"
+    "recharts": "^3.7.0",
+    "xlsx": "^0.18.5",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -33,6 +42,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.9"
   }
 }

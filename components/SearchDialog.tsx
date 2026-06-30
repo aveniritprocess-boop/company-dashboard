@@ -1,20 +1,35 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Command, FileText, CheckCircle2, Users, Settings, LayoutDashboard, Calendar, ArrowRight } from "lucide-react";
+import { Search, X, Command, FileText, CheckCircle2, Users, Settings, LayoutDashboard, Calendar, ArrowRight, ArrowUpRight } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
-import { subscribeToUserTasks, subscribeToAllTasks, Task } from "@/lib/tasks";
-import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
-import { subscribeToAllProjects } from "@/lib/projects";
-import { subscribeToAllTeams } from "@/lib/teams";
+import { useDebounce } from "@/lib/utils/hooks";
+
+import { searchEmployees } from "@/lib/search/employee-search";
+import { defaultEmployeeSearchParams } from "@/lib/search/search-types";
+import { searchTasks } from "@/lib/search/task-search";
+import { defaultTaskSearchParams } from "@/lib/search/search-types";
+import { searchProjects } from "@/lib/search/project-search";
+import { defaultProjectSearchParams } from "@/lib/search/search-types";
+import { searchTeams } from "@/lib/search/team-search";
+import { defaultTeamSearchParams } from "@/lib/search/search-types";
+import { AppUserSummary } from "@/lib/users";
+import { Task } from "@/lib/tasks";
 import { Project, Team } from "@/lib/roles";
+
+interface SearchGroup {
+  label: string;
+  items: SearchItem[];
+  seeAllLink?: string;
+  icon?: React.ReactNode;
+}
 
 interface SearchItem {
   id: string;
   title: string;
   description?: string;
-  category: "Page" | "Task" | "Employee" | "Attendance" | "Project" | "Team" | "Action";
+  category: string;
   link: string;
   icon: React.ReactNode;
 }
@@ -23,33 +38,54 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
   const router = useRouter();
   const { role, user } = useAuth();
   const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 300);
+  
+  const [loading, setLoading] = useState(false);
+  const [employees, setEmployees] = useState<AppUserSummary[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [users, setUsers] = useState<AppUserSummary[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
+  
+  const [selectedIndex, setSelectedIndex] = useState(0);
+  
+  // Total flat list of results for keyboard navigation
+  const [flatResults, setFlatResults] = useState<SearchItem[]>([]);
 
+  // Fetch results when debounced query changes
   useEffect(() => {
-    if (!user || !isOpen) return;
-    
-    let unsubTasks: () => void;
-    if (role === 'admin' || role === 'ceo') {
-      unsubTasks = subscribeToAllTasks((data) => setTasks(data), 100);
-    } else {
-      unsubTasks = subscribeToUserTasks(user.uid, (data) => setTasks(data), 100);
+    if (!isOpen || !user || !debouncedQuery) {
+      setEmployees([]);
+      setTasks([]);
+      setProjects([]);
+      setTeams([]);
+      return;
     }
-    
-    const unsubUsers = subscribeToAllUsers((data) => setUsers(data));
-    const unsubProjects = subscribeToAllProjects((data) => setProjects(data));
-    const unsubTeams = subscribeToAllTeams((data) => setTeams(data));
-    
-    return () => {
-      unsubTasks();
-      unsubUsers();
-      unsubProjects();
-      unsubTeams();
-    };
-  }, [user, isOpen, role]);
 
+    const fetchResults = async () => {
+      setLoading(true);
+      try {
+        const [empRes, taskRes, projRes, teamRes] = await Promise.all([
+          searchEmployees({ ...defaultEmployeeSearchParams, query: debouncedQuery }, 5),
+          searchTasks({ ...defaultTaskSearchParams, query: debouncedQuery }, user.uid, role || "employee", 5),
+          searchProjects({ ...defaultProjectSearchParams, query: debouncedQuery }, 5),
+          searchTeams({ ...defaultTeamSearchParams, query: debouncedQuery }, 5)
+        ]);
+
+        setEmployees(empRes.items);
+        setTasks(taskRes.items);
+        setProjects(projRes.items);
+        setTeams(teamRes.items);
+      } catch (err) {
+        console.error("Search failed:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchResults();
+  }, [isOpen, debouncedQuery, user, role]);
+
+  // Static pages
   const pages: SearchItem[] = [
     { id: "p1", title: "Dashboard", category: "Page", link: "/dashboard", icon: <LayoutDashboard className="h-4 w-4" /> },
     { id: "p2", title: "Your Tasks", category: "Page", link: "/dashboard/your-tasks", icon: <CheckCircle2 className="h-4 w-4" /> },
@@ -62,77 +98,114 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
     pages.push({ id: "p6", title: "Employee Management", category: "Page", link: "/dashboard/employees", icon: <Users className="h-4 w-4" /> });
   }
 
-  const results = [
-    ...pages.filter(p => !query || p.title.toLowerCase().includes(query.toLowerCase())),
-    ...users
-      .filter(u => 
-        query && (
-          (u.name || "").toLowerCase().includes(query.toLowerCase()) || 
-          (u.email || "").toLowerCase().includes(query.toLowerCase()) ||
-          (u.employee_id || "").toLowerCase().includes(query.toLowerCase())
-        )
-      )
-      .map(u => ({
-        id: u.uid,
-        title: u.name || "Unknown User",
-        description: `${u.role} • ${u.department || "No Department"}`,
-        category: "Employee" as const,
-        link: "/dashboard/employees",
-        icon: (
-          <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-[10px] font-bold text-indigo-600">
-            {u.name?.charAt(0) || "U"}
-          </div>
-        )
-      })),
-    ...users
-      .filter(u => query && (u.name || "").toLowerCase().includes(query.toLowerCase()))
-      .map(u => ({
-        id: `att-${u.uid}`,
-        title: `${u.name}'s Attendance`,
-        description: `View session logs and clock-in history`,
-        category: "Attendance" as const,
-        link: "/dashboard/attendance",
-        icon: <Calendar className="h-4 w-4" />
-      })),
-    ...projects
-      .filter(p => query && ((p.name || "").toLowerCase().includes(query.toLowerCase()) || (p.description || "").toLowerCase().includes(query.toLowerCase())))
-      .map((p, idx) => ({
-        id: p.id || `p-fallback-${idx}`,
-        title: p.name || "Untitled Project",
-        description: p.description,
-        category: "Project" as const,
-        link: "/dashboard/projects",
-        icon: <LayoutDashboard className="h-4 w-4 text-sky-500" />
-      })),
-    ...teams
-      .filter(t => query && (t.name || "").toLowerCase().includes(query.toLowerCase()))
-      .map((t, idx) => ({
-        id: t.id || `t-fallback-${idx}`,
-        title: t.name || "Untitled Team",
-        description: `${t.members?.length || 0} Members`,
-        category: "Team" as const,
-        link: "/dashboard/teams",
-        icon: <Users className="h-4 w-4 text-orange-500" />
-      })),
-    ...tasks
-      .filter(t => query && (t.taskText || t.title || "").toLowerCase().includes(query.toLowerCase()))
-      .map(t => ({
-        id: t.id,
-        title: t.taskText || t.title || "Untitled Task",
-        description: `Status: ${t.status}`,
-        category: "Task" as const,
-        link: "/dashboard/your-tasks",
-        icon: <FileText className="h-4 w-4" />
-      }))
-  ].slice(0, 10);
+  // Build grouped results
+  const groups: SearchGroup[] = [];
+  let currentFlatList: SearchItem[] = [];
 
+  const matchedPages = pages.filter(p => query && p.title.toLowerCase().includes(query.toLowerCase()));
+  if (matchedPages.length > 0) {
+    groups.push({ label: "Pages", items: matchedPages, icon: <LayoutDashboard className="h-4 w-4" /> });
+    currentFlatList = [...currentFlatList, ...matchedPages];
+  }
+
+  if (employees.length > 0) {
+    const empItems = employees.map(u => ({
+      id: u.uid,
+      title: u.name || "Unknown User",
+      description: `${u.role} • ${u.department || "No Department"}`,
+      category: "Employee",
+      link: "/dashboard/employees",
+      icon: (
+        <div className="h-6 w-6 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center text-[10px] font-bold text-indigo-600">
+          {u.name?.charAt(0) || "U"}
+        </div>
+      )
+    }));
+    groups.push({ label: "Employees", items: empItems, seeAllLink: "/dashboard/employees", icon: <Users className="h-4 w-4" /> });
+    currentFlatList = [...currentFlatList, ...empItems];
+  }
+
+  if (tasks.length > 0) {
+    const taskItems = tasks.map(t => ({
+      id: t.id,
+      title: t.taskText || t.title || "Untitled Task",
+      description: `Status: ${t.status}`,
+      category: "Task",
+      link: "/dashboard/your-tasks",
+      icon: <FileText className="h-4 w-4 text-blue-500" />
+    }));
+    groups.push({ label: "Tasks", items: taskItems, seeAllLink: "/dashboard/your-tasks", icon: <CheckCircle2 className="h-4 w-4" /> });
+    currentFlatList = [...currentFlatList, ...taskItems];
+  }
+
+  if (projects.length > 0) {
+    const projItems = projects.map(p => ({
+      id: p.id || `p-${Math.random()}`,
+      title: p.name || "Untitled Project",
+      description: p.description,
+      category: "Project",
+      link: "/dashboard/projects",
+      icon: <LayoutDashboard className="h-4 w-4 text-sky-500" />
+    }));
+    groups.push({ label: "Projects", items: projItems, seeAllLink: "/dashboard/projects", icon: <LayoutDashboard className="h-4 w-4" /> });
+    currentFlatList = [...currentFlatList, ...projItems];
+  }
+
+  if (teams.length > 0) {
+    const teamItems = teams.map(t => ({
+      id: t.id || `t-${Math.random()}`,
+      title: t.name || "Untitled Team",
+      description: `${t.members?.length || 0} Members`,
+      category: "Team",
+      link: "/dashboard/teams",
+      icon: <Users className="h-4 w-4 text-orange-500" />
+    }));
+    groups.push({ label: "Teams", items: teamItems, seeAllLink: "/dashboard/teams", icon: <Users className="h-4 w-4" /> });
+    currentFlatList = [...currentFlatList, ...teamItems];
+  }
+
+  // Update flat results for keyboard nav
+  useEffect(() => {
+    setFlatResults(currentFlatList);
+    setSelectedIndex(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employees, tasks, projects, teams, query]);
+
+  // Keyboard Navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (!isOpen) return;
+
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev < flatResults.length - 1 ? prev + 1 : prev));
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSelectedIndex(prev => (prev > 0 ? prev - 1 : 0));
+      } else if (e.key === "Enter") {
+        e.preventDefault();
+        if (flatResults[selectedIndex]) {
+          router.push(flatResults[selectedIndex].link);
+          onClose();
+        }
+      }
     };
-    if (isOpen) window.addEventListener("keydown", handleKeyDown);
+    
+    window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isOpen, onClose]);
+  }, [isOpen, flatResults, selectedIndex, router, onClose]);
+
+  // Reset query on close
+  useEffect(() => {
+    if (!isOpen) {
+      setQuery("");
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -144,14 +217,17 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
           <input
             autoFocus
             type="text"
-            placeholder="Search pages, tasks, or actions..."
+            placeholder="Search pages, employees, tasks, projects..."
             className="w-full pl-10 pr-10 py-2 bg-transparent border-none text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-0 text-lg"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
+          {loading && (
+            <div className="absolute right-12 h-4 w-4 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin"></div>
+          )}
           <button 
             onClick={onClose}
-            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors"
+            className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400 transition-colors absolute right-4"
           >
             <X className="h-5 w-5" />
           </button>
@@ -161,7 +237,7 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
           {!query && (
             <div className="p-8 text-center text-slate-400">
               <Command className="h-8 w-8 mx-auto mb-3 opacity-20" />
-              <p className="text-sm font-medium">Type to search for anything...</p>
+              <p className="text-sm font-medium">Type to search across the portal...</p>
               <div className="flex justify-center gap-4 mt-6">
                 <div className="text-[10px] uppercase font-bold tracking-widest text-slate-500 flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 px-3 py-1.5 rounded-full">
                   <span className="text-xs">↑↓</span> Navigate
@@ -173,45 +249,90 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
             </div>
           )}
 
-          {query && results.length === 0 && (
+          {query && !loading && groups.length === 0 && (
             <div className="p-12 text-center text-slate-500">
               <Search className="h-10 w-10 mx-auto mb-4 opacity-10" />
               <p className="font-medium">No results found for &quot;{query}&quot;</p>
-              <p className="text-sm mt-1 opacity-70">Try searching for something else.</p>
+              <p className="text-sm mt-1 opacity-70">Try adjusting your search.</p>
             </div>
           )}
 
-          {results.length > 0 && (
-            <div className="space-y-1">
-              {results.map((item) => (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    router.push(item.link);
-                    onClose();
-                  }}
-                  className="w-full flex items-center gap-4 p-3 rounded-xl hover:bg-indigo-50 dark:hover:bg-indigo-900/20 group transition-all text-left"
-                >
-                  <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex items-center justify-center text-slate-500 dark:text-slate-400 group-hover:bg-indigo-100 dark:group-hover:bg-indigo-900/50 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                    {item.icon}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <p className="font-semibold text-slate-900 dark:text-white truncate">
-                        {item.title}
-                      </p>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                        {item.category}
-                      </span>
+          {groups.length > 0 && (
+            <div className="space-y-4 p-2">
+              {groups.map((group, groupIdx) => (
+                <div key={group.label} className="space-y-1">
+                  <div className="flex items-center justify-between px-2 mb-2">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      {group.icon}
+                      {group.label}
                     </div>
-                    {item.description && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate uppercase font-medium tracking-tight">
-                        {item.description}
-                      </p>
+                    {group.seeAllLink && group.items.length >= 5 && (
+                      <button
+                        onClick={() => {
+                          router.push(group.seeAllLink!);
+                          onClose();
+                        }}
+                        className="text-xs font-semibold text-indigo-500 hover:text-indigo-600 flex items-center gap-1"
+                      >
+                        See all <ArrowUpRight className="h-3 w-3" />
+                      </button>
                     )}
                   </div>
-                  <ArrowRight className="h-4 w-4 text-slate-300 dark:text-slate-700 opacity-0 group-hover:opacity-100 -translate-x-2 group-hover:translate-x-0 transition-all" />
-                </button>
+                  
+                  {group.items.map((item) => {
+                    // Find flat index for selection highlighting
+                    const flatIdx = flatResults.findIndex(r => r.id === item.id);
+                    const isSelected = flatIdx === selectedIndex;
+
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          router.push(item.link);
+                          onClose();
+                        }}
+                        onMouseEnter={() => setSelectedIndex(flatIdx)}
+                        className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all text-left group
+                          ${isSelected 
+                            ? "bg-indigo-50 dark:bg-indigo-900/30" 
+                            : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
+                          }
+                        `}
+                      >
+                        <div className={`h-10 w-10 rounded-xl border flex items-center justify-center transition-colors
+                          ${isSelected 
+                            ? "bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400" 
+                            : "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-indigo-50"
+                          }
+                        `}>
+                          {item.icon}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className={`font-semibold truncate transition-colors
+                              ${isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-slate-900 dark:text-white"}
+                            `}>
+                              {item.title}
+                            </p>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
+                              {item.category}
+                            </span>
+                          </div>
+                          {item.description && (
+                            <p className={`text-xs mt-0.5 truncate uppercase font-medium tracking-tight transition-colors
+                              ${isSelected ? "text-indigo-500/80 dark:text-indigo-400/80" : "text-slate-500 dark:text-slate-400"}
+                            `}>
+                              {item.description}
+                            </p>
+                          )}
+                        </div>
+                        <ArrowRight className={`h-4 w-4 transition-all
+                          ${isSelected ? "opacity-100 translate-x-0 text-indigo-500" : "opacity-0 -translate-x-2 text-slate-300 dark:text-slate-700"}
+                        `} />
+                      </button>
+                    );
+                  })}
+                </div>
               ))}
             </div>
           )}

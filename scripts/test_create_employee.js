@@ -62,7 +62,7 @@ async function runTest() {
         email: newEmployeeEmail,
         password: "TempPassword123!",
         name: "Test Employee",
-        mobile: "+1 555-9999",
+        mobile: "+91-9988776655",
         role: "employee",
         reporting_manager_id: user.uid,
         department: "Engineering",

@@ -9,6 +9,7 @@ import { updateProfile } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { UserCircle, LogOut, Save, Loader2, AlertCircle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { logActivityClient } from "@/lib/audit-client";
 
 export default function SettingsPage() {
   const { user, role: userRole } = useAuth();
@@ -30,6 +31,11 @@ export default function SettingsPage() {
 
   const handleUpdateProfile = async () => {
     if (!auth.currentUser) return;
+    const oldName = auth.currentUser.displayName || "";
+    if (oldName === displayName) {
+      showToast("Profile name is unchanged.", "error");
+      return;
+    }
     setSubmitting(true);
     try {
       // Update Firebase Auth Profile
@@ -40,6 +46,24 @@ export default function SettingsPage() {
         name: displayName,
         updatedAt: new Date()
       });
+
+      // Write audit log
+      try {
+        await logActivityClient({
+          action: "settings_changed",
+          performedBy: auth.currentUser.uid,
+          performedByName: displayName,
+          targetId: auth.currentUser.uid,
+          targetType: "settings",
+          details: `Updated personal identity profile settings (display name: "${oldName}" -> "${displayName}").`,
+          metadata: {
+            before: { name: oldName },
+            after: { name: displayName }
+          }
+        });
+      } catch (auditErr) {
+        console.error("Failed to log profile update audit:", auditErr);
+      }
 
       showToast("Profile updated successfully!", "success");
     } catch (error) {
@@ -52,6 +76,8 @@ export default function SettingsPage() {
 
   const handleLogout = async () => {
     try {
+      console.error("SIGNOUT_TRIGGERED");
+      console.trace();
       await auth.signOut();
       router.push("/");
     } catch (error) {

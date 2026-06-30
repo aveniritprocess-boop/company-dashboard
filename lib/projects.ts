@@ -7,20 +7,35 @@ import {
   where,
   getDocs,
   getDoc,
-  onSnapshot
+  onSnapshot,
+  limit
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { Project } from "@/lib/roles";
 import { broadcastNotification } from "./notifications";
+import { logActivityClient } from "./audit-client";
+import { monitorQuery, trackListener } from "./firestore-monitor";
+import { CreateProjectSchema } from "./validators/project";
 
-export function subscribeToAllProjects(callback: (projects: Project[]) => void) {
-  const q = query(collection(db, "projects"));
-  return onSnapshot(q, (snapshot) => {
+export function subscribeToAllProjects(callback: (projects: Project[]) => void, limitCount?: number) {
+  const cleanupMonitor = trackListener("subscribeToAllProjects");
+  let q = query(collection(db, "projects"));
+  if (limitCount) {
+    q = query(q, limit(limitCount));
+  }
+  const unsub = onSnapshot(q, (snapshot) => {
     callback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project)));
   });
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 export async function createProject(name: string, description: string, teamId: string, ownerUid: string) {
+  // Validate payload before writing to Firestore
+  CreateProjectSchema.parse({ name, description, teamId, ownerUid });
+
   const projectRef = await addDoc(collection(db, "projects"), {
     name,
     description,
@@ -29,6 +44,22 @@ export async function createProject(name: string, description: string, teamId: s
     createdAt: serverTimestamp(),
     status: "active"
   });
+
+  // Write audit log
+  try {
+    const user = auth.currentUser;
+    await logActivityClient({
+      action: "project_created",
+      performedBy: ownerUid,
+      performedByName: user?.displayName || user?.email || "Employee",
+      targetId: projectRef.id,
+      targetType: "project",
+      details: `Created new project "${name}".`,
+      metadata: { name, description, teamId }
+    });
+  } catch (auditErr) {
+    console.error("Failed to log createProject audit:", auditErr);
+  }
 
   await broadcastNotification(
     "New Project Created", 
@@ -40,13 +71,15 @@ export async function createProject(name: string, description: string, teamId: s
 }
 
 export async function getProjectsForTeam(teamId: string) {
-  const q = query(
-    collection(db, "projects"),
-    where("teamId", "==", teamId),
-    where("status", "!=", "archived") // Example filter
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+  return monitorQuery("getProjectsForTeam", "projects", async () => {
+    const q = query(
+      collection(db, "projects"),
+      where("teamId", "==", teamId),
+      where("status", "!=", "archived") // Example filter
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+  });
 }
 
 // For global projects list if needed (e.g. "My Projects")
@@ -54,21 +87,25 @@ export async function getProjectsForTeam(teamId: string) {
 export async function getProjectsForUser(teamIds: string[]) {
   if (teamIds.length === 0) return [];
 
-  // Firestore 'in' query supports up to 10 items.
-  // robust solution needs chunking, but for MVP/Personal dashboard 10 is fine.
-  const q = query(
-    collection(db, "projects"),
-    where("teamId", "in", teamIds.slice(0, 10))
-  );
-  const snapshot = await getDocs(q);
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+  return monitorQuery("getProjectsForUser", "projects", async () => {
+    // Firestore 'in' query supports up to 10 items.
+    // robust solution needs chunking, but for MVP/Personal dashboard 10 is fine.
+    const q = query(
+      collection(db, "projects"),
+      where("teamId", "in", teamIds.slice(0, 10))
+    );
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Project));
+  });
 }
 
 export async function getProject(projectId: string) {
-  const docRef = doc(db, "projects", projectId);
-  const snap = await getDoc(docRef);
-  if (snap.exists()) {
-    return { id: snap.id, ...snap.data() } as Project;
-  }
-  return null;
+  return monitorQuery("getProject", "projects", async () => {
+    const docRef = doc(db, "projects", projectId);
+    const snap = await getDoc(docRef);
+    if (snap.exists()) {
+      return { id: snap.id, ...snap.data() } as Project;
+    }
+    return null;
+  });
 }

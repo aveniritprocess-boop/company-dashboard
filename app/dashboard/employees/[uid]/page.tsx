@@ -8,6 +8,7 @@ import { doc, onSnapshot, collection, query, where, orderBy, limit, addDoc, upda
 import { AppUserSummary } from "@/lib/users";
 import { getSessionHistory, AttendanceSession } from "@/lib/attendance";
 import { subscribeToAllTasksForUser, Task } from "@/lib/tasks";
+import { logActivityClient } from "@/lib/audit-client";
 import {
     ArrowLeft, Mail, Phone, MapPin, Briefcase, User, Clock, AlertCircle, FileText, Activity, ShieldCheck, Loader2, Calendar, Award, Download, Trash2, Plus, FileSignature, CheckCircle2, XCircle
 } from "lucide-react";
@@ -234,14 +235,14 @@ export default function EmployeeProfilePage() {
             });
 
             // Write audit log
-            await addDoc(collection(db, "audit_logs"), {
-                operator_id: user?.uid || "system",
-                operator_name: user?.displayName || user?.email || "Employee",
-                action: "update",
-                target_id: uid,
-                target_name: employee?.name || "Unknown",
+            await logActivityClient({
+                action: "leave_request_submitted",
+                performedBy: user?.uid || "system",
+                performedByName: user?.displayName || user?.email || "Employee",
+                targetId: uid,
+                targetType: "leave",
                 details: `Submitted a leave request for ${totalDays} days of ${leaveType} leave.`,
-                timestamp: new Date()
+                metadata: { totalDays, leaveType }
             });
 
             showToast("Leave request filed successfully.", "success");
@@ -265,14 +266,18 @@ export default function EmployeeProfilePage() {
             });
 
             // Write audit log
-            await addDoc(collection(db, "audit_logs"), {
-                operator_id: user?.uid || "system",
-                operator_name: user?.displayName || user?.email || "Manager",
-                action: "update",
-                target_id: uid,
-                target_name: employee?.name || "Unknown",
+            await logActivityClient({
+                action: status === "approved" ? "leave_approved" : "leave_rejected",
+                performedBy: user?.uid || "system",
+                performedByName: user?.displayName || user?.email || "Manager",
+                targetId: uid,
+                targetType: "leave",
                 details: `${status === 'approved' ? 'Approved' : 'Rejected'} leave request (ID: ${leaveId}).`,
-                timestamp: new Date()
+                metadata: { 
+                    leaveId, 
+                    before: { status: "pending" }, 
+                    after: { status } 
+                }
             });
 
             showToast(`Leave request ${status} successfully.`, "success");
@@ -310,14 +315,20 @@ export default function EmployeeProfilePage() {
             });
 
             // Write audit log
-            await addDoc(collection(db, "audit_logs"), {
-                operator_id: user?.uid || "system",
-                operator_name: user?.displayName || user?.email || "Manager",
-                action: "update",
-                target_id: uid,
-                target_name: employee?.name || "Unknown",
+            await logActivityClient({
+                action: "settings_changed",
+                performedBy: user?.uid || "system",
+                performedByName: user?.displayName || user?.email || "Manager",
+                targetId: uid,
+                targetType: "settings",
                 details: `Submitted a performance evaluation review for ${evalPeriod} with overall rating of ${overall_score}/5.`,
-                timestamp: new Date()
+                metadata: {
+                    evalPeriod,
+                    overall_score,
+                    ratingProductivity,
+                    ratingCollaboration,
+                    ratingCommunication
+                }
             });
 
             showToast("Performance review logged successfully.", "success");

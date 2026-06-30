@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { RequestChangeSchema } from '@/lib/validators/auth';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -9,12 +13,16 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: user.error }, { status: user.status });
         }
 
-        const body = await request.json();
-        const { uid, changes, previous_values, reason } = body;
-
-        if (!uid || !changes || !previous_values || !reason) {
-            return NextResponse.json({ error: 'Missing required fields: uid, changes, previous_values, reason' }, { status: 400 });
+        // Rate limit
+        const rateLimit = checkRateLimit(user.uid);
+        if (!rateLimit.allowed) {
+            return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
+
+        const body = await request.json();
+        const validation = parseOrError(RequestChangeSchema, body);
+        if ('response' in validation) return validation.response;
+        const { uid, changes, previous_values, reason } = validation.data;
 
         // Fetch target user name
         const targetDoc = await adminDb.collection('users').doc(uid).get();
@@ -37,14 +45,25 @@ export async function POST(request: NextRequest) {
         });
 
         // Add audit log for change request creation
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'HR operator',
-            action: 'update',
-            target_id: uid,
-            target_name: targetName,
+        await logActivityServer({
+            action: "employee_updated",
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'HR operator',
+            targetId: uid,
+            targetType: "user",
             details: `Requested profile revision approval (Request ID: ${docRef.id}). Reason: ${reason}`,
-            timestamp: new Date()
+            correlationId: user.correlationId,
+            metadata: {
+                requestId: docRef.id,
+                changes,
+                before: previous_values,
+                after: changes,
+                reason
+            },
+            ip: user.ip,
+            browser: user.browser,
+            device: user.device,
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

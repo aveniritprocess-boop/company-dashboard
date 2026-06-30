@@ -8,6 +8,7 @@ import { Team } from "@/lib/roles";
 import { AppUserSummary } from "@/lib/users";
 import { MentionTextarea, extractMentionedUsers } from "@/components/MentionTextarea";
 import { X, Loader2, Plus, Paperclip, Trash2 } from "lucide-react";
+import { CreateTaskSchema } from "@/lib/validators/task";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -64,12 +65,22 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
-    if (!title.trim()) {
-      setError("Task title is required.");
-      return;
-    }
-    if (assignedTo.length === 0) {
-      setError("Please assign the task to at least one employee.");
+
+    // Zod validation
+    const zodResult = CreateTaskSchema.safeParse({
+      taskText: title.trim(),
+      description: description.trim(),
+      assignedBy: user.uid,
+      assignedTo: assignedTo,
+      priority,
+      status,
+      startDate,
+      dueDate,
+      attachments,
+      teamId,
+    });
+    if (!zodResult.success) {
+      setError(zodResult.error.issues[0]?.message || "Validation failed.");
       return;
     }
 

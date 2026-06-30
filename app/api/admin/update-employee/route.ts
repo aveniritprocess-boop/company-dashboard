@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { UpdateEmployeeSchema } from '@/lib/validators/employee';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,13 +23,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can edit profiles' }, { status: 403 });
         }
 
-        // 2. Parse body fields
+        // 2. Parse and validate body
         const body = await request.json();
-        const { uid } = body;
-
-        if (!uid) {
-            return NextResponse.json({ error: 'Missing required field: uid' }, { status: 400 });
-        }
+        const validation = parseOrError(UpdateEmployeeSchema, body);
+        if ('response' in validation) return validation.response;
+        const { uid } = validation.data;
 
         // 3. Fetch current employee data for comparison
         const docRef = adminDb.collection('users').doc(uid);
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only the CEO can edit CEO profiles' }, { status: 403 });
         }
 
-        // Destructure permitted modifiable fields
+        // Destructure validated fields
         const {
             name,
             mobile,
@@ -68,7 +69,7 @@ export async function POST(request: NextRequest) {
             is_deleted,
             status,
             exit_details
-        } = body;
+        } = validation.data;
 
         const updatePayload: Record<string, unknown> = {
             updated_at: new Date()
@@ -162,18 +163,56 @@ export async function POST(request: NextRequest) {
         await docRef.update(updatePayload);
 
         // 7. Write to Audit Logs
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Admin',
-            action: 'update',
-            target_id: uid,
-            target_name: name || oldData.name || 'Unknown',
+        const isStatusChanged = 
+            (is_active !== undefined && is_active !== oldData.is_active) ||
+            (portal_access !== undefined && portal_access !== oldData.portal_access) ||
+            (is_locked !== undefined && is_locked !== oldData.is_locked);
+            
+        const isRoleChanged = role !== undefined && role !== oldData.role;
+        const actionType = isRoleChanged ? "role_change" : "employee_updated";
+        
+        const metadata: Record<string, unknown> = {
+            changes
+        };
+        
+        if (isRoleChanged || isStatusChanged) {
+            const before: Record<string, unknown> = {};
+            const after: Record<string, unknown> = {};
+            
+            if (isRoleChanged) {
+                before.role = oldData.role || "employee";
+                after.role = updatePayload.role;
+            }
+            if (is_active !== undefined && is_active !== oldData.is_active) {
+                before.is_active = oldData.is_active ?? true;
+                after.is_active = is_active;
+            }
+            if (portal_access !== undefined && portal_access !== oldData.portal_access) {
+                before.portal_access = oldData.portal_access ?? true;
+                after.portal_access = portal_access;
+            }
+            if (is_locked !== undefined && is_locked !== oldData.is_locked) {
+                before.is_locked = oldData.is_locked ?? false;
+                after.is_locked = is_locked;
+            }
+            
+            metadata.before = before;
+            metadata.after = after;
+        }
+
+        await logActivityServer({
+            action: actionType,
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Admin',
+            targetId: uid,
+            targetType: "user",
             details: `Updated employee profile. Modifications: ${changes.join(', ')}`,
+            correlationId: user.correlationId,
+            metadata,
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

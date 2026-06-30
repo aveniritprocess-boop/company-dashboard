@@ -6,6 +6,8 @@ import { createProject } from "@/lib/projects";
 import { getTeamsForUser } from "@/lib/teams";
 import { Team } from "@/lib/roles";
 import { Plus, X } from "lucide-react";
+import { CreateProjectSchema } from "@/lib/validators/project";
+import type { ZodIssue } from "zod";
 
 export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { onProjectCreated: () => void, preselectedTeamId?: string }) {
   const { user } = useAuth();
@@ -29,12 +31,18 @@ export function CreateProjectDialog({ onProjectCreated, preselectedTeamId }: { o
     setNameError("");
     setSubmitError("");
 
-    if (!name.trim()) {
-      setNameError("Project name is required.");
-      return;
-    }
-    if (name.trim().length < 3) {
-      setNameError("Project name must be at least 3 characters.");
+    // Zod validation
+    const zodResult = CreateProjectSchema.safeParse({
+      name: name.trim(),
+      description: description.trim(),
+      teamId: teamId || preselectedTeamId || "",
+      ownerUid: user?.uid || "",
+    });
+    if (!zodResult.success) {
+      const nameErr = zodResult.error.issues.find((e: ZodIssue) => String(e.path[0]) === 'name');
+      const otherErr = zodResult.error.issues.find((e: ZodIssue) => String(e.path[0]) !== 'name');
+      if (nameErr) setNameError(nameErr.message);
+      else if (otherErr) setSubmitError(otherErr.message);
       return;
     }
     if (!teamId && !preselectedTeamId) {

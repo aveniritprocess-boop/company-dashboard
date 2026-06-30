@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { ApproveChangeSchema } from '@/lib/validators/auth';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -9,17 +13,21 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: user.error }, { status: user.status });
         }
 
+        // Rate limit
+        const rateLimit = checkRateLimit(user.uid);
+        if (!rateLimit.allowed) {
+            return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
+        }
+
         // Only CEO or Admin can approve change requests
         if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin') {
-            return NextResponse.json({ error: 'Forbidden: Only CEO or Admin can approve profile changes' }, { status: 403 });
+            return NextResponse.json({ success: false, error: 'Forbidden: Only CEO or Admin can approve profile changes' }, { status: 403 });
         }
 
         const body = await request.json();
-        const { requestId, action, review_note } = body; // action is 'approve' or 'reject'
-
-        if (!requestId || !action) {
-            return NextResponse.json({ error: 'Missing required fields: requestId, action' }, { status: 400 });
-        }
+        const validation = parseOrError(ApproveChangeSchema, body);
+        if ('response' in validation) return validation.response;
+        const { requestId, action, review_note } = validation.data;
 
         const requestRef = adminDb.collection('change_approval_queue').doc(requestId);
         const requestSnap = await requestRef.get();
@@ -55,14 +63,25 @@ export async function POST(request: NextRequest) {
             const detailsStr = diffKeys.map(k => `[${k}] was modified from "${requestData.previous_values?.[k] || 'N/A'}" to "${requestData.changes?.[k] || 'N/A'}"`).join(', ');
 
             // Create Audit Log
-            await adminDb.collection('audit_logs').add({
-                operator_id: user.uid,
-                operator_name: user.name || user.email || 'Admin',
-                action: 'approve_change',
-                target_id: targetId,
-                target_name: targetName,
+            await logActivityServer({
+                action: "employee_updated",
+                performedBy: user.uid,
+                performedByName: user.name || user.email || 'Admin',
+                targetId: targetId,
+                targetType: "user",
                 details: `Approved profile changes for ${targetName}. Modifications applied: ${detailsStr}. Note: ${review_note || 'None'}`,
-                timestamp: new Date()
+                correlationId: user.correlationId,
+                metadata: {
+                    requestId,
+                    before: requestData.previous_values || {},
+                    after: requestData.changes || {},
+                    review_note: review_note || 'None',
+                    detailsStr
+                },
+                ip: user.ip,
+                browser: user.browser,
+                device: user.device,
+                userAgent: user.userAgent
             });
 
             return NextResponse.json({
@@ -80,14 +99,23 @@ export async function POST(request: NextRequest) {
             });
 
             // Create Audit Log
-            await adminDb.collection('audit_logs').add({
-                operator_id: user.uid,
-                operator_name: user.name || user.email || 'Admin',
-                action: 'reject_change',
-                target_id: targetId,
-                target_name: targetName,
+            await logActivityServer({
+                action: "employee_updated",
+                performedBy: user.uid,
+                performedByName: user.name || user.email || 'Admin',
+                targetId: targetId,
+                targetType: "user",
                 details: `Rejected profile changes for ${targetName}. Note: ${review_note || 'None'}`,
-                timestamp: new Date()
+                correlationId: user.correlationId,
+                metadata: {
+                    requestId,
+                    review_note: review_note || 'None',
+                    rejected: true
+                },
+                ip: user.ip,
+                browser: user.browser,
+                device: user.device,
+                userAgent: user.userAgent
             });
 
             return NextResponse.json({

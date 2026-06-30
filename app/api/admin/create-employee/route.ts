@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { CreateEmployeeSchema } from '@/lib/validators/employee';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -13,53 +16,36 @@ export async function POST(request: NextRequest) {
 
         const rateLimit = checkRateLimit(user.uid);
         if (!rateLimit.allowed) {
-            return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
+            return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
         if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
-            return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can create employees' }, { status: 403 });
+            return NextResponse.json({ success: false, error: 'Forbidden: Only CEO, Admin, or HR can create employees' }, { status: 403 });
         }
 
-        // 2. Parse common employee data
+        // 2. Parse and validate body
         const body = await request.json();
+        const validation = parseOrError(CreateEmployeeSchema, body);
+        if ('response' in validation) return validation.response;
+        const data = validation.data;
+
         const {
-            email,
-            password,
-            name,
-            mobile,
-            role,
-            reporting_manager_id,
-            department,
-            location,
-            location_id,
-            employee_id,
-            is_active,
-            portal_access,
-            is_locked,
-            designation,
-            joining_date,
-            employee_type,
-            address,
-            emergency_contact,
-            profile_photo,
-            gender,
-            status
-        } = body;
+            email, password, name, mobile, role, reporting_manager_id, department,
+            location, location_id, employee_id, is_active, portal_access, is_locked,
+            designation, joining_date, employee_type, address, emergency_contact,
+            profile_photo, gender, status
+        } = data;
 
         // Security role restriction: only CEO can create/assign 'ceo' or 'admin' roles
-        if ((role?.toLowerCase() === 'ceo' || role?.toLowerCase() === 'admin') && user.role.toLowerCase() !== 'ceo') {
-            return NextResponse.json({ error: 'Forbidden: Only the CEO can create Admin or CEO accounts' }, { status: 403 });
+        if ((role === 'ceo' || role === 'admin') && user.role.toLowerCase() !== 'ceo') {
+            return NextResponse.json({ success: false, error: 'Forbidden: Only the CEO can create Admin or CEO accounts' }, { status: 403 });
         }
 
-        if (!email || !password || !name) {
-            return NextResponse.json({ error: 'Missing required fields: email, password, name' }, { status: 400 });
-        }
-
-        // Check duplicate email
+        // Check duplicate email in Firebase Auth
         try {
             const existingUser = await adminAuth.getUserByEmail(email);
             if (existingUser) {
-                return NextResponse.json({ error: 'Duplicate Email: A user account already exists with this email.' }, { status: 400 });
+                return NextResponse.json({ success: false, error: 'Duplicate Email: A user account already exists with this email.' }, { status: 400 });
             }
         } catch (authErr: unknown) {
             const err = authErr as { code?: string };
@@ -70,14 +56,14 @@ export async function POST(request: NextRequest) {
 
         const dupSnap = await adminDb.collection('users').where('email', '==', email).limit(1).get();
         if (!dupSnap.empty) {
-            return NextResponse.json({ error: 'Duplicate Email: An employee record already exists with this email.' }, { status: 400 });
+            return NextResponse.json({ success: false, error: 'Duplicate Email: An employee record already exists with this email.' }, { status: 400 });
         }
 
-        // Verify duplicate employee ID (especially for manual override)
+        // Verify duplicate employee ID
         if (employee_id) {
             const idSnap = await adminDb.collection('users').where('employee_id', '==', employee_id).limit(1).get();
             if (!idSnap.empty) {
-                return NextResponse.json({ error: `Duplicate Employee ID: An employee record already exists with ID "${employee_id}".` }, { status: 400 });
+                return NextResponse.json({ success: false, error: `Duplicate Employee ID: An employee record already exists with ID "${employee_id}".` }, { status: 400 });
             }
         }
 
@@ -104,7 +90,7 @@ export async function POST(request: NextRequest) {
             portal_access: portal_access !== undefined ? portal_access : true,
             is_locked: is_locked !== undefined ? is_locked : false,
             is_deleted: false,
-            must_change_password: true, // Force password change on first login
+            must_change_password: true,
             designation: designation || "",
             joining_date: joining_date || new Date().toISOString().split('T')[0],
             employee_type: employee_type || "permanent",
@@ -118,18 +104,26 @@ export async function POST(request: NextRequest) {
         });
 
         // 5. Create Audit Log
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Admin',
-            action: 'create',
-            target_id: userRecord.uid,
-            target_name: name,
+        await logActivityServer({
+            action: "employee_created",
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Admin',
+            targetId: userRecord.uid,
+            targetType: "user",
             details: `Onboarded employee ${name} (${employee_id || 'N/A'}) in department: ${department || 'N/A'}, designation: ${designation || 'N/A'}, role: ${role || 'employee'}.`,
+            correlationId: user.correlationId,
+            metadata: {
+                name,
+                email,
+                role: role || 'employee',
+                department: department || 'N/A',
+                designation: designation || 'N/A',
+                employee_id: employee_id || 'N/A'
+            },
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({
@@ -142,6 +136,7 @@ export async function POST(request: NextRequest) {
         const error = err as Error;
         console.error('Error creating employee:', error);
         return NextResponse.json({
+            success: false,
             error: error.message || 'Internal server error'
         }, { status: 500 });
     }

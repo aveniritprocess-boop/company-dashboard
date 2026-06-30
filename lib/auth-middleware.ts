@@ -10,6 +10,7 @@ export interface DecodedUser {
     browser: string;
     device: string;
     userAgent: string;
+    correlationId?: string;
 }
 
 export function getClientInfo(request: NextRequest) {
@@ -66,12 +67,14 @@ export async function verifyFirebaseToken(request: NextRequest): Promise<Decoded
         }
         
         const clientInfo = getClientInfo(request);
+        const correlationId = request.headers.get('x-correlation-id') || undefined;
         
         return {
             uid: decodedToken.uid,
             email: decodedToken.email,
             role: userData.role || 'employee',
             name: userData.name || userData.displayName || '',
+            correlationId,
             ...clientInfo
         };
     } catch (error: unknown) {

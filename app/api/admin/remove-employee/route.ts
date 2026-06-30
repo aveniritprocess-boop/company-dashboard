@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
+import { logActivityServer } from '@/lib/audit-server';
+import { UidBodySchema } from '@/lib/validators/auth';
+import { parseOrError } from '@/lib/validators/common';
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,13 +23,11 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can archive employees' }, { status: 403 });
         }
 
-        // 2. Parse target user ID
+        // 2. Parse and validate target user ID
         const body = await request.json();
-        const { uid } = body;
-
-        if (!uid) {
-            return NextResponse.json({ error: 'Missing required field: uid' }, { status: 400 });
-        }
+        const validation = parseOrError(UidBodySchema, body);
+        if ('response' in validation) return validation.response;
+        const { uid } = validation.data;
 
         // Fetch employee details for validation and audit trail
         const targetDoc = await adminDb.collection('users').doc(uid).get();
@@ -61,18 +62,22 @@ export async function POST(request: NextRequest) {
         });
 
         // 5. Create Audit Log
-        await adminDb.collection('audit_logs').add({
-            operator_id: user.uid,
-            operator_name: user.name || user.email || 'Admin',
-            action: 'delete',
-            target_id: uid,
-            target_name: targetName,
+        await logActivityServer({
+            action: "employee_deleted",
+            performedBy: user.uid,
+            performedByName: user.name || user.email || 'Admin',
+            targetId: uid,
+            targetType: "user",
             details: `Archived/Soft-deleted employee record for ${targetName} (${targetData?.employee_id || 'N/A'}). Portal access revoked.`,
+            correlationId: user.correlationId,
+            metadata: {
+                targetName,
+                employee_id: targetData?.employee_id || 'N/A'
+            },
             ip: user.ip,
             browser: user.browser,
             device: user.device,
-            userAgent: user.userAgent,
-            timestamp: new Date()
+            userAgent: user.userAgent
         });
 
         return NextResponse.json({

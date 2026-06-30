@@ -9,148 +9,306 @@ service cloud.firestore {
     function getUserData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
+
+    // Recommendation 9: isActiveUser check
+    // Block disabled, locked, deleted, or portal-revoked accounts at the database layer
+    function isUserActive() {
+      return isSignedIn() &&
+             (getUserData().is_active == true || !getUserData().keys().hasAny(['is_active'])) &&
+             (getUserData().is_locked == false || !getUserData().keys().hasAny(['is_locked'])) &&
+             (getUserData().is_deleted == false || !getUserData().keys().hasAny(['is_deleted'])) &&
+             (getUserData().portal_access == true || !getUserData().keys().hasAny(['portal_access']));
+    }
     
-    function hasRole(role) {
-      return isSignedIn() && getUserData().role == role;
+    function isRole(role) {
+      return isUserActive() && getUserData().role == role;
     }
     
     function isCEO() {
-      return hasRole('ceo');
+      return isRole('ceo');
     }
     
     function isAdmin() {
-      return hasRole('admin') || hasRole('super_admin');
+      return isCEO() || isRole('admin') || isRole('super_admin');
     }
     
     function isManager() {
-      return hasRole('manager');
+      return isRole('manager');
     }
 
     function isHR() {
-      return hasRole('hr') || hasRole('hr_admin') || hasRole('hr_executive');
+      return isRole('hr') || isRole('hr_admin') || isRole('hr_executive');
+    }
+
+    function isManagerOrAbove() {
+      return isAdmin() || isManager() || isHR();
+    }
+
+    function getTaskData(taskId) {
+      return get(/databases/$(database)/documents/tasks/$(taskId)).data;
+    }
+
+    function isAssignedToUser(taskData, userId) {
+      return taskData.assignedTo == userId || 
+             (taskData.assignedTo is list && userId in taskData.assignedTo) ||
+             taskData.assigned_to == userId || 
+             (taskData.assigned_to is list && userId in taskData.assigned_to);
+    }
+    
+    function canReadTask(taskId) {
+      return isUserActive() && (
+        isAdmin() ||
+        getTaskData(taskId).assignedBy == request.auth.uid ||
+        getTaskData(taskId).assigned_by == request.auth.uid ||
+        isAssignedToUser(getTaskData(taskId), request.auth.uid)
+      );
     }
 
     // Users collection
     match /users/{userId} {
-      // Any signed-in user can read user documents (e.g. for directory visibility, task assignments, and reporting manager lookup)
-      allow read: if isSignedIn();
-      // Any signed-in user can CREATE their own document (defaults to employee or no role).
+      allow read: if isUserActive();
+      
+      // Allow new users to create their user record on first sign-in
       allow create: if isSignedIn() && request.auth.uid == userId && (
         !request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'employee'
       );
-      // Users can update their own doc (except role); Admins/CEOs can update anyone's doc.
-      allow update: if isSignedIn() && (
-        isCEO() || isAdmin() || 
-        (request.auth.uid == userId && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role']))
+      
+      // Recommendation 10: Protect against self-role escalation and other fields
+      allow update: if isUserActive() && (
+        isAdmin() || (
+          request.auth.uid == userId && 
+          request.resource.data.role == resource.data.role &&
+          (!request.resource.data.keys().hasAny(['role', 'is_admin', 'reporting_manager_id', 'portal_access']) || 
+           (request.resource.data.reporting_manager_id == resource.data.reporting_manager_id &&
+            request.resource.data.portal_access == resource.data.portal_access))
+        )
       );
-      // Prevent deletion of CEO
+      
       allow delete: if isAdmin() && resource.data.role != 'ceo';
+
+      // Recommendation 1 & 2: Attendance & Todos subcollections under users/{userId}
+      match /attendance/{attendanceId} {
+        allow read: if isUserActive() && (
+          isAdmin() || isHR() || userId == request.auth.uid ||
+          (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
+        );
+        allow create: if isUserActive() && (
+          userId == request.auth.uid ||
+          (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
+        );
+        allow update: if isUserActive() && (
+          userId == request.auth.uid ||
+          (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
+        );
+        allow delete: if isAdmin() || isHR();
+      }
+
+      match /todos/{todoId} {
+        allow read: if isUserActive() && (
+          isAdmin() || userId == request.auth.uid
+        );
+        allow create: if isUserActive() && userId == request.auth.uid;
+        allow update: if isUserActive() && userId == request.auth.uid;
+        allow delete: if isUserActive() && userId == request.auth.uid;
+      }
     }
 
     // Tasks collection
     match /tasks/{taskId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || 
-        (isManager() && (request.auth.uid == resource.data.assignedBy || request.auth.uid in resource.data.assignedTo)) ||
-        (request.auth.uid == resource.data.assignedTo || (resource.data.assignedTo is list && request.auth.uid in resource.data.assignedTo))
-      );
+      allow read: if canReadTask(taskId);
       
-      allow create: if isCEO() || isAdmin() || isManager();
+      allow create: if isAdmin() || isManager();
       
-      allow update: if isSignedIn() && (
-        isCEO() || isAdmin() ||
+      allow update: if isUserActive() && (
+        isAdmin() ||
         (isManager() && resource.data.assignedBy == request.auth.uid) ||
-        (request.auth.uid in resource.data.assignedTo && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at']))
+        (isAssignedToUser(resource.data, request.auth.uid) && 
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at']) &&
+         request.resource.data.assignedTo == resource.data.assignedTo &&
+         request.resource.data.assignedBy == resource.data.assignedBy)
       );
       
       allow delete: if isAdmin() || (isCEO() && resource.data.assignedBy == request.auth.uid);
+
+      // Comments subcollection under tasks/{taskId}
+      match /comments/{commentId} {
+        allow read: if canReadTask(taskId);
+        allow create: if canReadTask(taskId) && request.resource.data.commentedBy == request.auth.uid;
+        allow update, delete: if isUserActive() && (
+          isAdmin() || resource.data.commentedBy == request.auth.uid
+        );
+      }
     }
     
-    // Daily Reports (used internally as dailyDiary)
+    // Daily Reports (dailyDiary)
     match /dailyDiary/{reportId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || 
+      allow read: if isUserActive() && (
+        isAdmin() || 
         (isManager() && resource.data.managerId == request.auth.uid) ||
         resource.data.userId == request.auth.uid
       );
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && (
-        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
+      allow create: if isUserActive() && request.resource.data.userId == request.auth.uid;
+      allow update: if isUserActive() && (
+        isAdmin() || (
+          resource.data.userId == request.auth.uid && 
+          request.resource.data.userId == resource.data.userId
+        )
       );
+      allow delete: if isUserActive() && (isAdmin() || resource.data.userId == request.auth.uid);
     }
     
     // Notifications Collection
     match /notifications/{notificationId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
-      );
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn() && (
-        isCEO() || isAdmin() || resource.data.userId == request.auth.uid
-      );
+      allow read: if isUserActive() && resource.data.userId == request.auth.uid;
+      allow create: if isUserActive();
+      allow update, delete: if isUserActive() && resource.data.userId == request.auth.uid;
     }
     
     // Performance Scores
     match /performance_scores/{scoreId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || isManager() || resource.data.userId == request.auth.uid
+      allow read: if isUserActive() && (
+        isManagerOrAbove() || resource.data.userId == request.auth.uid
       );
-      allow write: if isCEO() || isAdmin() || isManager();
+      allow write: if isManagerOrAbove();
     }
 
     // Roles collection
     match /roles/{roleId} {
-      allow read: if isSignedIn();
-      allow write: if isCEO() || isAdmin();
+      allow read: if isUserActive();
+      allow write: if isAdmin();
     }
 
     // Audit logs collection
     match /audit_logs/{logId} {
-      allow read: if isSignedIn() && (isCEO() || isAdmin() || isHR());
-      allow create: if isSignedIn();
-      allow update, delete: if false;
+      allow read: if isUserActive() && (isAdmin() || isHR() || isCEO());
+      allow create: if isUserActive() && (
+        isCEO() ||
+        (
+          (request.resource.data.performedBy == request.auth.uid || request.resource.data.operator_id == request.auth.uid) &&
+          (request.resource.data.createdAt == request.time || !request.resource.data.keys().hasAny(['createdAt'])) &&
+          (request.resource.data.timestamp == request.time || !request.resource.data.keys().hasAny(['timestamp']))
+        )
+      );
+      allow update, delete: if isCEO();
     }
 
     // Change approval queue collection
     match /change_approval_queue/{requestId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn() && (isCEO() || isAdmin() || isHR());
+      allow read: if isUserActive() && (
+        isAdmin() || isHR() || 
+        resource.data.requested_by == request.auth.uid
+      );
+      allow write: if isUserActive() && (isAdmin() || isHR());
     }
 
     // Leave requests collection
     match /leave_requests/{requestId} {
-      allow read: if isSignedIn();
-      allow write: if isSignedIn();
+      allow read: if isUserActive() && (
+        isAdmin() || isHR() || 
+        resource.data.user_id == request.auth.uid
+      );
+      allow create: if isUserActive() && (
+        isAdmin() || isHR() || 
+        request.resource.data.user_id == request.auth.uid
+      );
+      allow update: if isUserActive() && (
+        isAdmin() || isHR() || (
+          resource.data.user_id == request.auth.uid &&
+          request.resource.data.user_id == resource.data.user_id
+        )
+      );
+      allow delete: if isUserActive() && (isAdmin() || isHR());
     }
 
     // Performance reviews collection
     match /performance_reviews/{reviewId} {
-      allow read: if isSignedIn() && (isCEO() || isAdmin() || isManager() || resource.data.userId == request.auth.uid);
-      allow write: if isCEO() || isAdmin() || isManager() || isHR();
+      allow read: if isUserActive() && (isManagerOrAbove() || resource.data.userId == request.auth.uid);
+      allow write: if isManagerOrAbove();
     }
     
     // Sales Leads
     match /salesLeads/{leadId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      allow read: if isUserActive() && (
+        isManagerOrAbove() || resource.data.assignedTo == request.auth.uid
       );
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      allow create: if isUserActive();
+      allow update: if isUserActive() && (
+        isManagerOrAbove() || (
+          resource.data.assignedTo == request.auth.uid &&
+          request.resource.data.assignedTo == resource.data.assignedTo
+        )
       );
-      allow delete: if isCEO() || isAdmin();
+      allow delete: if isAdmin();
     }
 
     // Service Leads
     match /serviceLeads/{leadId} {
-      allow read: if isSignedIn() && (
-        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      allow read: if isUserActive() && (
+        isManagerOrAbove() || resource.data.assignedTo == request.auth.uid
       );
-      allow create: if isSignedIn();
-      allow update: if isSignedIn() && (
-        isCEO() || isAdmin() || isManager() || resource.data.assignedTo == request.auth.uid
+      allow create: if isUserActive();
+      allow update: if isUserActive() && (
+        isManagerOrAbove() || (
+          resource.data.assignedTo == request.auth.uid &&
+          request.resource.data.assignedTo == resource.data.assignedTo
+        )
       );
-      allow delete: if isCEO() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // Teams collection (newly secured in Phase 4.2)
+    match /teams/{teamId} {
+      allow read: if isUserActive() && (
+        isAdmin() || isHR() || 
+        resource.data.createdBy == request.auth.uid ||
+        request.auth.uid in resource.data.memberUids
+      );
+      allow create: if isManagerOrAbove();
+      allow update: if isUserActive() && (
+        isAdmin() || 
+        resource.data.createdBy == request.auth.uid ||
+        (isManager() && request.auth.uid in resource.data.memberUids)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Projects collection (newly secured in Phase 4.2)
+    match /projects/{projectId} {
+      allow read: if isUserActive() && (
+        isAdmin() || isHR() || 
+        resource.data.createdBy == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.memberUids
+      );
+      allow create: if isManagerOrAbove();
+      allow update: if isUserActive() && (
+        isAdmin() || 
+        resource.data.createdBy == request.auth.uid ||
+        (isManager() && request.auth.uid in get(/databases/$(database)/documents/teams/$(resource.data.teamId)).data.memberUids)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Invitations (newly secured in Phase 4.2)
+    match /invites/{inviteId} {
+      allow read: if isUserActive() && (
+        isAdmin() || isHR() || 
+        resource.data.email == request.auth.token.email
+      );
+      allow create: if isUserActive() && (isAdmin() || isHR());
+      allow update: if isUserActive() && (
+        isAdmin() || isHR() || (
+          resource.data.email == request.auth.token.email &&
+          request.resource.data.email == resource.data.email &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'accepted_at', 'acceptedAt'])
+        )
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Locations (newly secured in Phase 4.2)
+    match /locations/{locationId} {
+      allow read: if isUserActive();
+      allow write: if isAdmin();
     }
 
     // Default deny for everything else

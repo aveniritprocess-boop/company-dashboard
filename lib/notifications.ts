@@ -1,3 +1,4 @@
+import { authenticatedFetch } from "@/lib/api-client";
 import {
   collection,
   addDoc,
@@ -9,7 +10,9 @@ import {
   onSnapshot,
   serverTimestamp,
   Timestamp,
-  writeBatch
+  writeBatch,
+  limit,
+  getCountFromServer
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
@@ -37,7 +40,7 @@ export async function sendEmail(
   html?: string
 ): Promise<void> {
   try {
-    const response = await fetch("/api/send-email", {
+    const response = await authenticatedFetch("/api/send-email", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -143,21 +146,49 @@ export async function markAllNotificationsAsRead(userId: string, notifications: 
   await batch.commit();
 }
 
+import { trackListener } from "./firestore-monitor";
+
 export function subscribeToNotifications(
   userId: string,
-  callback: (notifications: AppNotification[]) => void
+  callback: (notifications: AppNotification[]) => void,
+  limitCount?: number
 ): () => void {
-  const q = query(
+  const cleanupMonitor = trackListener("subscribeToNotifications");
+  let q = query(
     collection(db, NOTIFICATIONS_COLLECTION),
     where("userId", "==", userId),
     orderBy("createdAt", "desc")
   );
 
-  return onSnapshot(q, (snapshot) => {
+  if (limitCount) {
+    q = query(q, limit(limitCount));
+  }
+
+  const unsub = onSnapshot(q, (snapshot) => {
     const notifications = snapshot.docs.map((d) => ({
       id: d.id,
       ...d.data(),
     })) as AppNotification[];
     callback(notifications);
   });
+
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
+}
+
+export async function getUnreadNotificationsCount(userId: string): Promise<number> {
+  try {
+    const q = query(
+      collection(db, NOTIFICATIONS_COLLECTION),
+      where("userId", "==", userId),
+      where("read", "==", false)
+    );
+    const snap = await getCountFromServer(q);
+    return snap.data().count;
+  } catch (error) {
+    console.error("Failed to get unread notification count:", error);
+    return 0;
+  }
 }

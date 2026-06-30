@@ -1,4 +1,5 @@
 import { getDocsFromCache, getDocsFromServer, getDocs, Query, DocumentData } from "firebase/firestore";
+import { devLog } from "@/lib/logger";
 
 /**
  * Helper to get data from cache first, then server.
@@ -15,12 +16,12 @@ export async function getCachedData<T>(
         id: doc.id,
         ...doc.data(),
       })) as T[];
-      console.log("Loaded from cache");
+      devLog("Loaded from cache");
       return { data, fromCache: true };
     }
 
     // 2. Fallback to Server
-    console.log("Cache empty, fetching from server...");
+    devLog("Cache empty, fetching from server...");
     const serverSnapshot = await getDocsFromServer(q);
     const data = serverSnapshot.docs.map((doc) => ({
       id: doc.id,

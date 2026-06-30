@@ -13,6 +13,13 @@ interface RoleGuardProps {
   fallbackPath?: string;
 }
 
+function getRolePermissions(role?: string | null): Record<string, boolean> | null {
+  if (!role || !(role in PERMISSIONS)) {
+    return null;
+  }
+  return PERMISSIONS[role as keyof typeof PERMISSIONS] as Record<string, boolean>;
+}
+
 export function RoleGuard({
   children,
   allowedRoles,
@@ -31,8 +38,7 @@ export function RoleGuard({
       } else if (allowedRoles && !allowedRoles.includes(role as UserRole)) {
         allowed = false;
       } else if (permission) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const rolePermissions = (PERMISSIONS as any)[role];
+        const rolePermissions = getRolePermissions(role);
         if (!rolePermissions || !rolePermissions[permission]) {
           allowed = false;
         }
@@ -54,8 +60,7 @@ export function RoleGuard({
 
   // Check specific permission if provided
   if (permission) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rolePermissions = (PERMISSIONS as any)[role];
+    const rolePermissions = getRolePermissions(role);
     if (!rolePermissions || !rolePermissions[permission]) {
       return fallback;
     }

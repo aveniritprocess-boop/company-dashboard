@@ -16,9 +16,13 @@ import {
   DocumentData,
   FieldValue
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { createNotification, sendEmail } from "./notifications";
+import { trackListener } from "./firestore-monitor";
 import { getUserById } from "./users";
+import { APP_URL } from "./config";
+import { logActivityClient } from "./audit-client";
+import { CreateTaskSchema } from "./validators/task";
 
 export type TaskStatus = "pending" | "in_progress" | "completed" | "approved" | "rejected" | "hold" | "backlog" | "todo" | "done" | "review";
 
@@ -81,6 +85,8 @@ export async function createTask(
   attachments: { name: string; size: string; url: string; }[] = [],
   teamId: string = ""
 ) {
+  // Validate payload before writing to Firestore
+  CreateTaskSchema.parse({ taskText, description, assignedBy, assignedTo, priority, startDate, dueDate, mentionedUsers, status, attachments, teamId });
   const now = serverTimestamp();
   const docRef = await addDoc(collection(db, TASKS_COLLECTION), {
     taskText,
@@ -122,8 +128,8 @@ export async function createTask(
         await sendEmail(
           assignee.email,
           "New Task Assigned",
-          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: https://company-dashboard-avenirit.web.app/dashboard/your-tasks`,
-          `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="https://company-dashboard-avenirit.web.app/dashboard/your-tasks">Dashboard</a></p>`
+          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: ${APP_URL}/dashboard/your-tasks`,
+          `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="${APP_URL}/dashboard/your-tasks">Dashboard</a></p>`
         );
       }
     }
@@ -136,8 +142,8 @@ export async function createTask(
       await sendEmail(
         assignee.email,
         "New Task Assigned",
-        `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: https://company-dashboard-avenirit.web.app/dashboard/your-tasks`,
-        `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="https://company-dashboard-avenirit.web.app/dashboard/your-tasks">Dashboard</a></p>`
+        `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: ${APP_URL}/dashboard/your-tasks`,
+        `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="${APP_URL}/dashboard/your-tasks">Dashboard</a></p>`
       );
     }
   }
@@ -150,10 +156,38 @@ export async function createTask(
     }
   }
 
+  // Write audit log
+  try {
+    const creator = await getUserById(assignedBy);
+    const creatorName = creator?.name || auth.currentUser?.displayName || auth.currentUser?.email || "Manager";
+    await logActivityClient({
+      action: "task_created",
+      performedBy: assignedBy,
+      performedByName: creatorName,
+      targetId: docRef.id,
+      targetType: "task",
+      details: `Created task: "${taskText}" assigned to ${Array.isArray(assignedTo) ? assignedTo.join(', ') : assignedTo}.`,
+      metadata: {
+        taskText,
+        assignedTo,
+        priority,
+        status,
+        dueDate
+      }
+    });
+  } catch (auditErr) {
+    console.error("Failed to log createTask audit:", auditErr);
+  }
+
   return docRef.id;
 }
 
-export async function updateTaskStatus(taskId: string, status: TaskStatus) {
+export async function updateTaskStatus(
+  taskId: string, 
+  status: TaskStatus,
+  operatorId?: string,
+  operatorName?: string
+) {
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   const now = serverTimestamp();
   
@@ -175,9 +209,34 @@ export async function updateTaskStatus(taskId: string, status: TaskStatus) {
   }
 
   await updateDoc(taskRef, updates);
+
+  // Write audit log
+  try {
+    const user = auth.currentUser;
+    const performedBy = operatorId || user?.uid || "system";
+    const performedByName = operatorName || user?.displayName || user?.email || "Employee";
+    await logActivityClient({
+      action: "task_updated",
+      performedBy,
+      performedByName,
+      targetId: taskId,
+      targetType: "task",
+      details: `Updated task status to: ${status}.`,
+      metadata: { status }
+    });
+  } catch (auditErr) {
+    console.error("Failed to log updateTaskStatus audit:", auditErr);
+  }
 }
 
-export async function updateTaskProgress(taskId: string, progress: number, taskTitle: string = "A task", assignedBy?: string) {
+export async function updateTaskProgress(
+  taskId: string, 
+  progress: number, 
+  taskTitle: string = "A task", 
+  assignedBy?: string,
+  operatorId?: string,
+  operatorName?: string
+) {
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   const now = serverTimestamp();
   
@@ -213,6 +272,24 @@ export async function updateTaskProgress(taskId: string, progress: number, taskT
   }
   
   await updateDoc(taskRef, updates);
+
+  // Write audit log
+  try {
+    const user = auth.currentUser;
+    const performedBy = operatorId || user?.uid || "system";
+    const performedByName = operatorName || user?.displayName || user?.email || "Employee";
+    await logActivityClient({
+      action: "task_updated",
+      performedBy,
+      performedByName,
+      targetId: taskId,
+      targetType: "task",
+      details: `Updated task progress to: ${progress}%.`,
+      metadata: { progress, status: updates.status || "in_progress" }
+    });
+  } catch (auditErr) {
+    console.error("Failed to log updateTaskProgress audit:", auditErr);
+  }
 }
 
 export async function startTask(taskId: string) {
@@ -223,9 +300,30 @@ export async function reopenTask(taskId: string) {
   await updateTaskStatus(taskId, "pending");
 }
 
-export async function deleteTask(taskId: string) {
+export async function deleteTask(
+  taskId: string,
+  operatorId?: string,
+  operatorName?: string
+) {
   const taskRef = doc(db, TASKS_COLLECTION, taskId);
   await deleteDoc(taskRef);
+
+  // Write audit log
+  try {
+    const user = auth.currentUser;
+    const performedBy = operatorId || user?.uid || "system";
+    const performedByName = operatorName || user?.displayName || user?.email || "Employee";
+    await logActivityClient({
+      action: "task_deleted",
+      performedBy,
+      performedByName,
+      targetId: taskId,
+      targetType: "task",
+      details: `Deleted task (ID: ${taskId}).`
+    });
+  } catch (auditErr) {
+    console.error("Failed to log deleteTask audit:", auditErr);
+  }
 }
 
 export async function addTaskComment(
@@ -288,20 +386,13 @@ export async function addTaskComment(
 
 export function subscribeToTaskComments(taskId: string, callback: (comments: TaskComment[]) => void) {
   const commentsRef = collection(db, TASKS_COLLECTION, taskId, "comments");
-  const q = query(commentsRef);
+  const q = query(commentsRef, orderBy("createdAt", "asc"));
 
   return onSnapshot(q, (snapshot) => {
     const comments = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as TaskComment[];
-
-    // Sort ascending by creation time
-    comments.sort((a, b) => {
-      const timeA = a.createdAt?.toMillis?.() || 0;
-      const timeB = b.createdAt?.toMillis?.() || 0;
-      return timeA - timeB;
-    });
 
     callback(comments);
   });
@@ -325,7 +416,8 @@ export function subscribeToUserTasks(
     q = query(q, startAfter(lastVisibleDoc));
   }
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener("subscribeToUserTasks");
+  const unsub = onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -334,6 +426,10 @@ export function subscribeToUserTasks(
     const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     callback(tasks, lastDoc);
   });
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 // Function to subscribe to tasks assigned BY a specific admin
@@ -354,7 +450,8 @@ export function subscribeToTasksAssignedBy(
     q = query(q, startAfter(lastVisibleDoc));
   }
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener("subscribeToTasksAssignedBy");
+  const unsub = onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -363,6 +460,10 @@ export function subscribeToTasksAssignedBy(
     const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     callback(tasks, lastDoc);
   });
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 // Function to subscribe to ALL tasks (CEO/Admin view)
@@ -381,7 +482,8 @@ export function subscribeToAllTasks(
     q = query(q, startAfter(lastVisibleDoc));
   }
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener("subscribeToAllTasks");
+  const unsub = onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -390,6 +492,10 @@ export function subscribeToAllTasks(
     const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     callback(tasks, lastDoc);
   });
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 // Function to subscribe to tasks created in the last N days
@@ -471,7 +577,8 @@ export function subscribeToRecentTasksForUser(
 // Subscribe to ALL tasks a user is involved in (assigned to them OR assigned by them)
 export function subscribeToAllTasksForUser(
   userId: string,
-  callback: (tasks: Task[]) => void
+  callback: (tasks: Task[]) => void,
+  limitCount?: number
 ) {
   const merged = new Map<string, Task>();
   let latestTo: Task[] = [];
@@ -489,20 +596,26 @@ export function subscribeToAllTasksForUser(
     callback(result);
   };
 
-  const qTo = query(
+  let qTo = query(
     collection(db, TASKS_COLLECTION),
     where("assignedTo", "==", userId)
   );
 
-  const qToArray = query(
+  let qToArray = query(
     collection(db, TASKS_COLLECTION),
     where("assignedTo", "array-contains", userId)
   );
 
-  const qBy = query(
+  let qBy = query(
     collection(db, TASKS_COLLECTION),
     where("assignedBy", "==", userId)
   );
+
+  if (limitCount) {
+    qTo = query(qTo, limit(limitCount));
+    qToArray = query(qToArray, limit(limitCount));
+    qBy = query(qBy, limit(limitCount));
+  }
 
   const unsubTo = onSnapshot(qTo, (snap) => {
     latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
@@ -556,11 +669,14 @@ export function subscribeToTaskHistory(taskId: string, callback: (history: TaskH
   });
 }
 
-export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void) {
-  const q = query(
+export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void, limitCount?: number) {
+  let q = query(
     collection(db, TASKS_COLLECTION),
     orderBy("createdAt", "desc")
   );
+  if (limitCount) {
+    q = query(q, limit(limitCount));
+  }
   return onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
