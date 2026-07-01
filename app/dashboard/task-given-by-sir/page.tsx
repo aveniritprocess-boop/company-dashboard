@@ -11,10 +11,7 @@ import {
     Plus,
     Loader2,
     X,
-    ClipboardList,
-    Calendar,
-    CheckCircle2,
-    Clock
+    ClipboardList
 } from "lucide-react";
 
 import { EnhancedTaskCard } from "@/components/tasks/EnhancedTaskCard";

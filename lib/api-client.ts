@@ -42,8 +42,6 @@ export async function authenticatedFetch(
   if (response.status === 401) {
     console.warn("Session expired or unauthorized. Performing clean sign-out...");
     try {
-      console.error("SIGNOUT_TRIGGERED");
-      console.trace();
       await auth.signOut();
     } catch (err) {
       console.error("Error signing out from auth:", err);
@@ -53,8 +51,6 @@ export async function authenticatedFetch(
     
     // Redirect to login with expired query
     if (typeof window !== "undefined") {
-      console.error("LOGIN_REDIRECT_TRIGGERED");
-      console.trace();
       window.location.href = "/login?expired=true";
     }
     throw new Error("Your session has expired. Please sign in again.");
