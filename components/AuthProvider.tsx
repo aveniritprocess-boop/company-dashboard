@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { User, onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, updateDoc, collection } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, collection, getDocFromServer } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { initializeRolesAndPermissions } from "@/lib/init-db";
 
@@ -35,8 +35,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Auth State Changed Listener
     useEffect(() => {
+        let unsubRoles: (() => void) | null = null;
+        let unsubDoc: (() => void) | null = null;
+
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
+
+            if (unsubRoles) { unsubRoles(); unsubRoles = null; }
+            if (unsubDoc) { unsubDoc(); unsubDoc = null; }
 
             if (firebaseUser) {
                 // Initialize default roles in database
@@ -61,7 +67,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
 
                 // Subscribe to the roles collection in real time
-                const unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
+                unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
                     const list = snap.docs.map(d => ({
                         id: d.id,
                         name: d.data().name || d.id,
@@ -72,47 +78,63 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 });
 
                 // Subscribe to user document for live status and role
-                const unsubDoc = onSnapshot(doc(db, "users", firebaseUser.uid), (docSnap) => {
-                    if (docSnap.exists()) {
-                        const userData = docSnap.data();
-                        
-                        // Instrument logging for diagnostic
-                        if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
-                            console.error("LOGOUT_CONDITION_MET", {
-                                exists: docSnap.exists(),
-                                fromCache: docSnap.metadata.fromCache,
-                                hasPendingWrites: docSnap.metadata.hasPendingWrites,
-                                is_active: userData.is_active,
-                                portal_access: userData.portal_access,
-                                is_locked: userData.is_locked,
-                                is_deleted: userData.is_deleted,
-                                snapshotTimestamp: new Date().toISOString()
-                            });
-                            console.trace("SIGNOUT_TRIGGERED_AUTH_PROVIDER");
-                            auth.signOut();
-                            document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-                            setRole(null);
-                            setUser(null);
-                            setLoading(false);
-                            return;
-                        }
+                unsubDoc = onSnapshot(doc(db, "users", firebaseUser.uid), async (docSnap) => {
+                    try {
+                        if (docSnap.exists()) {
+                            let userData = docSnap.data();
+                            
+                            // Instrument logging for diagnostic
+                            if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
+                                console.error("LOGOUT_CONDITION_MET", {
+                                    exists: docSnap.exists(),
+                                    fromCache: docSnap.metadata.fromCache,
+                                    hasPendingWrites: docSnap.metadata.hasPendingWrites,
+                                    is_active: userData.is_active,
+                                    portal_access: userData.portal_access,
+                                    is_locked: userData.is_locked,
+                                    is_deleted: userData.is_deleted,
+                                    snapshotTimestamp: new Date().toISOString()
+                                });
+                                
+                                // Verify with the server to prevent false logouts from cached ghost reads
+                                try {
+                                    const serverSnap = await getDocFromServer(doc(db, "users", firebaseUser.uid));
+                                    if (serverSnap.exists()) {
+                                        const serverData = serverSnap.data();
+                                        if (serverData.is_active === false || serverData.portal_access === false || serverData.is_locked === true || serverData.is_deleted === true) {
+                                            console.trace("SIGNOUT_TRIGGERED_AUTH_PROVIDER");
+                                            auth.signOut();
+                                            document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
+                                            setRole(null);
+                                            setUser(null);
+                                            return;
+                                        }
+                                        // False positive from cache, apply actual server state
+                                        userData = serverData;
+                                    } else {
+                                        console.warn("User document not found on server.");
+                                        return;
+                                    }
+                                } catch (err) {
+                                    console.error("Error verifying logout condition with server:", err);
+                                    // Do not sign the user out if getDocFromServer fails, keep current session active
+                                    // Fall through to use the cached userData
+                                }
+                            }
 
-                        const userRole = userData.role || "employee";
-                        setRole(userRole);
-                        setMustChangePassword(!!userData.must_change_password);
-                    } else {
-                        setRole(null);
+                            const userRole = userData.role || "employee";
+                            setRole(userRole);
+                            setMustChangePassword(!!userData.must_change_password);
+                        } else {
+                            setRole(null);
+                        }
+                    } finally {
+                        setLoading(false);
                     }
-                    setLoading(false);
                 }, (error) => {
                     console.error("Error fetching user data:", error);
                     setLoading(false);
                 });
-
-                return () => {
-                    unsubRoles();
-                    unsubDoc();
-                };
             } else {
                 setRole(null);
                 setMustChangePassword(false);
@@ -120,7 +142,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             }
         });
 
-        return () => unsubscribe();
+        return () => {
+            unsubscribe();
+            if (unsubRoles) unsubRoles();
+            if (unsubDoc) unsubDoc();
+        };
     }, []);
 
     // Compute permissions matrix when role or rolesList changes
