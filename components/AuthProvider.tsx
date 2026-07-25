@@ -76,8 +76,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     if (docSnap.exists()) {
                         const userData = docSnap.data();
                         
-                        // Enforce deactivation, locked status, and portal access disabled
+                        // Instrument logging for diagnostic
                         if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
+                            console.error("LOGOUT_CONDITION_MET", {
+                                exists: docSnap.exists(),
+                                fromCache: docSnap.metadata.fromCache,
+                                hasPendingWrites: docSnap.metadata.hasPendingWrites,
+                                is_active: userData.is_active,
+                                portal_access: userData.portal_access,
+                                is_locked: userData.is_locked,
+                                is_deleted: userData.is_deleted,
+                                snapshotTimestamp: new Date().toISOString()
+                            });
+                            console.trace("SIGNOUT_TRIGGERED_AUTH_PROVIDER");
                             auth.signOut();
                             document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
                             setRole(null);

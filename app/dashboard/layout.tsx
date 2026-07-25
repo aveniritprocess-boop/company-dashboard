@@ -22,8 +22,13 @@ export default function DashboardLayout({
   useEffect(() => {
     if (!loading && !user) {
       document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-      console.error("LOGIN_REDIRECT_TRIGGERED");
-      console.trace();
+      console.error("LOGIN_REDIRECT_TRIGGERED_LAYOUT", {
+        loading,
+        userIsNull: user === null,
+        pathname,
+        timestamp: new Date().toISOString()
+      });
+      console.trace("SIGNOUT_TRACE_LAYOUT");
       window.location.href = "/login";
       return;
     }

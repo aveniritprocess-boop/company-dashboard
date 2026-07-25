@@ -3,13 +3,18 @@
 import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { db } from "@/lib/firebase";
-import { updatePassword } from "firebase/auth";
+import {
+    updatePassword,
+    EmailAuthProvider,
+    reauthenticateWithCredential
+} from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { useRouter } from "next/navigation";
 import { Shield, KeyRound, Loader2, CheckCircle2, XCircle } from "lucide-react";
 
 export default function UpdatePasswordPage() {
     const { user } = useAuth();
+    const [currentPassword, setCurrentPassword] = useState("");
     const [password, setPassword] = useState("");
     const [confirmPassword, setConfirmPassword] = useState("");
     const [loading, setLoading] = useState(false);
@@ -31,7 +36,13 @@ export default function UpdatePasswordPage() {
         setError(null);
 
         try {
-            if (!user) throw new Error("No user found");
+            if (!user || !user.email) {
+                throw new Error("No user found or email missing");
+            }
+
+            // Re-authenticate first
+            const credential = EmailAuthProvider.credential(user.email, currentPassword);
+            await reauthenticateWithCredential(user, credential);
 
             // 1. Update password in Firebase Auth
             await updatePassword(user, password);
@@ -46,7 +57,15 @@ export default function UpdatePasswordPage() {
         } catch (error: unknown) {
             const err = error as any; // eslint-disable-line @typescript-eslint/no-explicit-any
             console.error(err);
-            setError(err.message || "Failed to update password");
+            if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+                setError("Incorrect current password.");
+            } else if (err.code === 'auth/weak-password') {
+                setError("The new password is too weak.");
+            } else if (err.code === 'auth/network-request-failed') {
+                setError("Network error. Please try again.");
+            } else {
+                setError(err.message || "Failed to update password");
+            }
         } finally {
             setLoading(false);
         }
@@ -72,6 +91,21 @@ export default function UpdatePasswordPage() {
                                 {error}
                             </div>
                         )}
+
+                        <div className="space-y-1.5">
+                            <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Current Temporary Password</label>
+                            <div className="relative">
+                                <KeyRound className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                <input
+                                    type="password"
+                                    required
+                                    value={currentPassword}
+                                    onChange={e => setCurrentPassword(e.target.value)}
+                                    className="w-full pl-11 pr-5 py-4 rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 text-sm focus:ring-2 focus:ring-indigo-500/50 focus:outline-none font-medium"
+                                    placeholder="Enter current password"
+                                />
+                            </div>
+                        </div>
 
                         <div className="space-y-1.5">
                             <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">New Password</label>

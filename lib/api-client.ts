@@ -40,20 +40,21 @@ export async function authenticatedFetch(
   });
 
   if (response.status === 401) {
-    console.warn("Session expired or unauthorized. Performing clean sign-out...");
-    try {
-      await auth.signOut();
-    } catch (err) {
-      console.error("Error signing out from auth:", err);
-    }
-    // Clear cookie
-    document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
+    const isAuthApi = url.includes("/api/auth") || url.includes("/api/login") || url.includes("/api/session");
     
-    // Redirect to login with expired query
-    if (typeof window !== "undefined") {
-      window.location.href = "/login?expired=true";
+    if (isAuthApi) {
+      try {
+        await auth.signOut();
+      } catch (err) {
+        console.error("Error signing out from auth:", err);
+      }
+      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
+      
+      if (typeof window !== "undefined") {
+        window.location.href = "/login?expired=true";
+      }
+      throw new Error("Your session has expired. Please sign in again.");
     }
-    throw new Error("Your session has expired. Please sign in again.");
   }
 
   return response;
