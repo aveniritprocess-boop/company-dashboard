@@ -18,8 +18,8 @@ export function SidebarUser({ isCollapsed }: SidebarUserProps) {
     try {
       console.error("SIGNOUT_TRIGGERED");
       console.trace();
+      await fetch("/api/auth/logout", { method: "POST" });
       await signOut(auth);
-      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
       console.error("LOGIN_REDIRECT_TRIGGERED");
       console.trace();
       window.location.href = "/login";

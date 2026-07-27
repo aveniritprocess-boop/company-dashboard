@@ -388,7 +388,8 @@ export function subscribeToTaskComments(taskId: string, callback: (comments: Tas
   const commentsRef = collection(db, TASKS_COLLECTION, taskId, "comments");
   const q = query(commentsRef, orderBy("createdAt", "asc"));
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener(`subscribeToTaskComments-${taskId}`);
+  const unsub = onSnapshot(q, (snapshot) => {
     const comments = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
@@ -396,38 +397,80 @@ export function subscribeToTaskComments(taskId: string, callback: (comments: Tas
 
     callback(comments);
   });
+  
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
-// Function to subscribe to tasks assigned to a specific user
+// Function to subscribe to tasks assigned to a specific user.
+// Runs two parallel queries to support both legacy string and array assignedTo fields.
 export function subscribeToUserTasks(
-  userId: string, 
+  userId: string,
   callback: (tasks: Task[], lastDoc: QueryDocumentSnapshot<DocumentData> | null) => void,
   pageSize: number = 20,
   lastVisibleDoc: QueryDocumentSnapshot<DocumentData> | null = null
 ) {
-  let q = query(
+  // Query 1: legacy scalar assignment  (assignedTo == userId)
+  let qScalar = query(
     collection(db, TASKS_COLLECTION),
     where("assignedTo", "==", userId),
     orderBy("createdAt", "desc"),
     limit(pageSize)
   );
-
   if (lastVisibleDoc) {
-    q = query(q, startAfter(lastVisibleDoc));
+    qScalar = query(qScalar, startAfter(lastVisibleDoc));
   }
 
-  const cleanupMonitor = trackListener("subscribeToUserTasks");
-  const unsub = onSnapshot(q, (snapshot) => {
-    const tasks = snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Task[];
+  // Query 2: array-based multi-assignment  (assignedTo array-contains userId)
+  let qArray = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedTo", "array-contains", userId),
+    orderBy("createdAt", "desc"),
+    limit(pageSize)
+  );
+  if (lastVisibleDoc) {
+    qArray = query(qArray, startAfter(lastVisibleDoc));
+  }
 
-    const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
-    callback(tasks, lastDoc);
+  // Merge helper: deduplicate by id and sort by createdAt desc
+  const merge = (scalar: Task[], array: Task[]): Task[] => {
+    const seen = new Map<string, Task>();
+    [...scalar, ...array].forEach(t => seen.set(t.id, t));
+    return Array.from(seen.values()).sort((a, b) => {
+      const tA = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      const tB = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
+      return tB - tA;
+    });
+  };
+
+  let latestScalar: Task[] = [];
+  let latestArray: Task[] = [];
+  // lastDoc comes from the scalar query (primary pagination cursor)
+  let lastScalarDoc: QueryDocumentSnapshot<DocumentData> | null = null;
+
+  const emit = () => {
+    const merged = merge(latestScalar, latestArray);
+    callback(merged, lastScalarDoc);
+  };
+
+  const cleanupMonitor = trackListener("subscribeToUserTasks");
+
+  const unsubScalar = onSnapshot(qScalar, (snapshot) => {
+    latestScalar = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
+    lastScalarDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
+    emit();
   });
+
+  const unsubArray = onSnapshot(qArray, (snapshot) => {
+    latestArray = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
+    emit();
+  });
+
   return () => {
-    unsub();
+    unsubScalar();
+    unsubArray();
     cleanupMonitor();
   };
 }
@@ -512,13 +555,19 @@ export function subscribeToRecentTasks(
     orderBy("createdAt", "desc")
   );
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener(`subscribeToRecentTasks-${days}`);
+  const unsub = onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Task[];
     callback(tasks);
   });
+  
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 // Subscribe to recent tasks relevant to a specific user (assigned to them OR by them)
@@ -561,6 +610,8 @@ export function subscribeToRecentTasksForUser(
     callback(result);
   };
 
+  const cleanupMonitor = trackListener(`subscribeToRecentTasksForUser-${userId}`);
+
   const unsubTo = onSnapshot(qAssignedTo, (snap) => {
     latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
@@ -571,7 +622,11 @@ export function subscribeToRecentTasksForUser(
     emit();
   });
 
-  return () => { unsubTo(); unsubBy(); };
+  return () => { 
+    unsubTo(); 
+    unsubBy(); 
+    cleanupMonitor();
+  };
 }
 
 // Subscribe to ALL tasks a user is involved in (assigned to them OR assigned by them)
@@ -617,6 +672,8 @@ export function subscribeToAllTasksForUser(
     qBy = query(qBy, limit(limitCount));
   }
 
+  const cleanupMonitor = trackListener(`subscribeToAllTasksForUser-${userId}`);
+
   const unsubTo = onSnapshot(qTo, (snap) => {
     latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
@@ -636,6 +693,7 @@ export function subscribeToAllTasksForUser(
     unsubTo();
     unsubToArray();
     unsubBy();
+    cleanupMonitor();
   };
 }
 
@@ -660,13 +718,19 @@ export function subscribeToTaskHistory(taskId: string, callback: (history: TaskH
   const historyRef = collection(db, TASKS_COLLECTION, taskId, "history");
   const q = query(historyRef, orderBy("createdAt", "desc"));
 
-  return onSnapshot(q, (snapshot) => {
+  const cleanupMonitor = trackListener(`subscribeToTaskHistory-${taskId}`);
+  const unsub = onSnapshot(q, (snapshot) => {
     const history = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as TaskHistoryItem[];
     callback(history);
   });
+  
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 
 export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void, limitCount?: number) {
@@ -677,12 +741,19 @@ export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void, li
   if (limitCount) {
     q = query(q, limit(limitCount));
   }
-  return onSnapshot(q, (snapshot) => {
+  
+  const cleanupMonitor = trackListener(`subscribeToAllTasksNoLimit`);
+  const unsub = onSnapshot(q, (snapshot) => {
     const tasks = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     })) as Task[];
     callback(tasks);
   });
+  
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
 }
 

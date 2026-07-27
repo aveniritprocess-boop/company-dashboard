@@ -1,73 +1,29 @@
-"use client";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { adminAuth } from "@/lib/firebase-admin";
+import { DashboardClientLayout } from "@/components/DashboardClientLayout";
 
-import { useAuth } from "@/components/AuthProvider";
-import { usePathname, useRouter } from "next/navigation";
-import { useEffect } from "react";
-import { Sidebar } from "@/components/Sidebar";
-import { NetworkStatus } from "@/components/NetworkStatus";
-import { TopBar } from "@/components/TopBar";
-import { VerifyEmailNotice } from "@/components/VerifyEmailNotice";
-import { CommandMenu } from "@/components/CommandMenu";
-import { ToastProvider } from "@/components/ToastProvider";
-
-export default function DashboardLayout({
+export default async function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const { user, mustChangePassword, loading } = useAuth();
-  const router = useRouter();
-  const pathname = usePathname();
+  const cookieStore = await cookies();
+  const sessionCookie = cookieStore.get("session")?.value;
 
-  useEffect(() => {
-    if (!loading && !user) {
-      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-      console.error("LOGIN_REDIRECT_TRIGGERED_LAYOUT", {
-        loading,
-        userIsNull: user === null,
-        pathname,
-        timestamp: new Date().toISOString()
-      });
-      console.trace("SIGNOUT_TRACE_LAYOUT");
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!loading && mustChangePassword && pathname !== "/dashboard/update-password") {
-      router.push("/dashboard/update-password");
-    }
-  }, [user, loading, mustChangePassword, pathname, router]);
-
-  if (loading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
-      </div>
-    );
+  if (!sessionCookie) {
+    redirect("/login");
   }
 
-  if (!user) {
-    return null;
+  try {
+    await adminAuth.verifySessionCookie(sessionCookie, true);
+  } catch (error) {
+    console.error("Session verification failed:", error);
+    // Delete the invalid cookie to break the infinite redirect loop
+    const store = await cookies();
+    store.delete("session");
+    redirect("/login");
   }
 
-  return (
-    <ToastProvider>
-      <div className="h-screen bg-gray-50 dark:bg-black font-sans flex overflow-hidden">
-        <NetworkStatus />
-        <CommandMenu />
-        <Sidebar />
-        <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-          <TopBar />
-          <main
-            className={`flex-1 min-h-0 ${pathname === "/dashboard/sheet"
-                ? "overflow-hidden flex flex-col"
-                : "overflow-y-auto p-4 sm:p-8 scroll-smooth"
-              }`}
-          >
-            {!user.emailVerified ? <VerifyEmailNotice /> : children}
-          </main>
-        </div>
-      </div>
-    </ToastProvider>
-  );
+  return <DashboardClientLayout>{children}</DashboardClientLayout>;
 }

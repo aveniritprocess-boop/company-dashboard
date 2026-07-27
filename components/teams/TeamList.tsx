@@ -13,13 +13,17 @@ export function TeamList() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [errorMsg, setErrorMsg] = useState("");
+
   const fetchTeams = async () => {
     if (!user) return;
+    setErrorMsg("");
     try {
       const userTeams = await getTeamsForUser(user.uid);
       setTeams(userTeams);
     } catch (error) {
       console.error("Error fetching teams:", error);
+      setErrorMsg("Failed to load your teams. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -43,7 +47,13 @@ export function TeamList() {
         <CreateTeamDialog onTeamCreated={fetchTeams} />
       </div>
 
-      {teams.length === 0 ? (
+      {errorMsg && (
+        <div className="rounded-lg bg-red-50 p-4 border border-red-200">
+          <p className="text-sm font-medium text-red-800">{errorMsg}</p>
+        </div>
+      )}
+
+      {teams.length === 0 && !errorMsg ? (
         <div className="text-center py-12 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
           <Users className="mx-auto h-12 w-12 text-gray-400" />
           <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">No teams yet</h3>

@@ -29,11 +29,14 @@ export function ExportMenu({ data, columns, metadata, disabled }: ExportMenuProp
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const [errorMsg, setErrorMsg] = useState("");
+
   const handleExport = async (format: "csv" | "xlsx" | "pdf") => {
     if (disabled || data.length === 0) return;
     
     setIsExporting(format);
     setIsOpen(false);
+    setErrorMsg("");
 
     try {
       const fullMeta: ExportMetadata = { ...metadata, format, recordCount: data.length };
@@ -46,7 +49,8 @@ export function ExportMenu({ data, columns, metadata, disabled }: ExportMenuProp
       await auditExport(fullMeta);
     } catch (error) {
       console.error(`Failed to export ${format}:`, error);
-      alert(`An error occurred while generating the ${format.toUpperCase()} file.`);
+      setErrorMsg(`An error occurred while generating the ${format.toUpperCase()} file.`);
+      setTimeout(() => setErrorMsg(""), 3000);
     } finally {
       setIsExporting(null);
     }
@@ -83,6 +87,11 @@ export function ExportMenu({ data, columns, metadata, disabled }: ExportMenuProp
           >
             <FileBox className="h-4 w-4 text-rose-500" /> Export as PDF
           </button>
+        </div>
+      )}
+      {errorMsg && (
+        <div className="absolute right-0 mt-2 w-64 bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs z-50 shadow-sm animate-in fade-in">
+          {errorMsg}
         </div>
       )}
     </div>

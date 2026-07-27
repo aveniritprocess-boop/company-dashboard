@@ -229,3 +229,38 @@ export async function getTeam(teamId: string) {
     return null;
   });
 }
+
+export async function updateTeam(teamId: string, name: string) {
+  const teamRef = doc(db, "teams", teamId);
+  const teamSnap = await getDoc(teamRef);
+
+  if (teamSnap.exists()) {
+    const data = teamSnap.data() as Team;
+    const oldName = data.name;
+
+    await updateDoc(teamRef, {
+      name
+    });
+
+    try {
+      const user = auth.currentUser;
+      await logActivityClient({
+        action: "team_updated",
+        performedBy: user?.uid || "system",
+        performedByName: user?.displayName || user?.email || "Employee",
+        targetId: teamId,
+        targetType: "team",
+        details: `Renamed team from "${oldName}" to "${name}".`,
+        metadata: { oldName, newName: name, action: "rename_team" }
+      });
+    } catch (auditErr) {
+      console.error("Failed to log updateTeam audit:", auditErr);
+    }
+
+    await broadcastNotification(
+      "Team Renamed",
+      `The team "${oldName}" has been renamed to "${name}".`,
+      { type: "record" }
+    );
+  }
+}

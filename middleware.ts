@@ -1,31 +1,30 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
     const { pathname } = request.nextUrl;
 
-    // 1. Define protected routes
+    // Define protected and auth routes
     const isDashboardRoute = pathname.startsWith('/dashboard');
     const isAuthRoute = pathname.startsWith('/login');
 
-    // 2. Check for the session cookie
-    // Note: We'll set this 'session' cookie in the login page upon successful Firebase auth
-    const hasSession = request.cookies.has('session');
+    // Read the HttpOnly session cookie
+    const sessionCookie = request.cookies.get('session');
 
-    // 3. Redirect logic
-    if (isDashboardRoute && !hasSession) {
+    // Fast-path: no cookie at all → redirect to login immediately
+    if (isDashboardRoute && !sessionCookie) {
         return NextResponse.redirect(new URL('/login', request.url));
     }
 
-    if (isAuthRoute && hasSession) {
+    // Already logged in → redirect away from /login
+    if (isAuthRoute && sessionCookie) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
     return NextResponse.next();
 }
 
-// Config to match dashboard and login routes
+// Match dashboard and login routes only
 export const config = {
     matcher: ['/dashboard/:path*', '/login'],
-};
-     
+};

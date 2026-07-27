@@ -41,30 +41,26 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Forbidden: Only the CEO can create Admin or CEO accounts' }, { status: 403 });
         }
 
-        // Check duplicate email in Firebase Auth
-        try {
-            const existingUser = await adminAuth.getUserByEmail(email);
-            if (existingUser) {
-                return NextResponse.json({ success: false, error: 'Duplicate Email: A user account already exists with this email.' }, { status: 400 });
-            }
-        } catch (authErr: unknown) {
-            const err = authErr as { code?: string };
-            if (err.code !== 'auth/user-not-found') {
-                console.error("Auth check error:", authErr);
-            }
+        // Check duplicate email and employee_id concurrently
+        const [authCheck, emailSnap, idSnap] = await Promise.all([
+            adminAuth.getUserByEmail(email).catch((err: { code?: string }) => {
+                if (err.code !== 'auth/user-not-found') console.error("Auth check error:", err);
+                return null;
+            }),
+            adminDb.collection('users').where('email', '==', email).limit(1).get(),
+            employee_id ? adminDb.collection('users').where('employee_id', '==', employee_id).limit(1).get() : Promise.resolve({ empty: true })
+        ]);
+
+        if (authCheck) {
+            return NextResponse.json({ success: false, error: 'Duplicate Email: A user account already exists with this email.' }, { status: 400 });
         }
 
-        const dupSnap = await adminDb.collection('users').where('email', '==', email).limit(1).get();
-        if (!dupSnap.empty) {
+        if (!emailSnap.empty) {
             return NextResponse.json({ success: false, error: 'Duplicate Email: An employee record already exists with this email.' }, { status: 400 });
         }
 
-        // Verify duplicate employee ID
-        if (employee_id) {
-            const idSnap = await adminDb.collection('users').where('employee_id', '==', employee_id).limit(1).get();
-            if (!idSnap.empty) {
-                return NextResponse.json({ success: false, error: `Duplicate Employee ID: An employee record already exists with ID "${employee_id}".` }, { status: 400 });
-            }
+        if (!idSnap.empty) {
+            return NextResponse.json({ success: false, error: `Duplicate Employee ID: An employee record already exists with ID "${employee_id}".` }, { status: 400 });
         }
 
         // 3. Create user in Firebase Auth

@@ -5,6 +5,7 @@ import { User, onAuthStateChanged } from "firebase/auth";
 import { doc, onSnapshot, updateDoc, collection, getDocFromServer } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { initializeRolesAndPermissions } from "@/lib/init-db";
+import { trackListener } from "@/lib/firestore-monitor";
 
 interface AuthContextType {
     user: User | null;
@@ -67,6 +68,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                 }
 
                 // Subscribe to the roles collection in real time
+                const cleanupRoles = trackListener("AuthProvider-roles");
                 unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
                     const list = snap.docs.map(d => ({
                         id: d.id,
@@ -76,8 +78,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     }));
                     setRolesList(list);
                 });
+                const originalUnsubRoles = unsubRoles;
+                unsubRoles = () => { originalUnsubRoles(); cleanupRoles(); };
 
                 // Subscribe to user document for live status and role
+                const cleanupUser = trackListener(`AuthProvider-user-${firebaseUser.uid}`);
                 unsubDoc = onSnapshot(doc(db, "users", firebaseUser.uid), async (docSnap) => {
                     try {
                         if (docSnap.exists()) {
@@ -103,8 +108,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                         const serverData = serverSnap.data();
                                         if (serverData.is_active === false || serverData.portal_access === false || serverData.is_locked === true || serverData.is_deleted === true) {
                                             console.trace("SIGNOUT_TRIGGERED_AUTH_PROVIDER");
-                                            auth.signOut();
-                                            document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
+                                            await fetch("/api/auth/logout", { method: "POST" });
+                                            await auth.signOut();
                                             setRole(null);
                                             setUser(null);
                                             return;
@@ -135,6 +140,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                     console.error("Error fetching user data:", error);
                     setLoading(false);
                 });
+                const originalUnsubDoc = unsubDoc;
+                unsubDoc = () => { originalUnsubDoc(); cleanupUser(); };
             } else {
                 setRole(null);
                 setMustChangePassword(false);

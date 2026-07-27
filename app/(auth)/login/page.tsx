@@ -31,11 +31,25 @@ export default function LoginPage() {
   const recaptchaContainerRef = useRef<HTMLDivElement>(null);
 
   // ── Set cookie and navigate — cookie MUST be set before navigation ──
-  const goToDashboard = () => {
-    document.cookie = "session=true; path=/; max-age=86400; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-    setTimeout(() => {
+  const goToDashboard = async (idToken: string) => {
+    try {
+      const res = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ idToken })
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to establish secure session");
+      }
+
       window.location.href = "/dashboard";
-    }, 100);
+    } catch (err) {
+      console.error("Session creation error:", err);
+      setError("Failed to establish secure session.");
+    }
   };
 
   const isValidating = useRef(false);
@@ -143,8 +157,9 @@ export default function LoginPage() {
       const result = await mfaResolver!.resolveSignIn(multiFactorAssertion);
 
       // Log login event
+      let idToken = "";
       try {
-        const idToken = await result.user.getIdToken();
+        idToken = await result.user.getIdToken(true);
         await fetch('/api/auth/log-event', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
@@ -152,9 +167,12 @@ export default function LoginPage() {
         });
       } catch (err) {
         console.error("Failed to log login event:", err);
+        if (!idToken) {
+          idToken = await result.user.getIdToken(true);
+        }
       }
 
-      goToDashboard();
+      goToDashboard(idToken);
     } catch (err: unknown) {
       setError((err as Error).message);
     } finally {
@@ -206,9 +224,10 @@ export default function LoginPage() {
       await updateDoc(doc(db, "users", user.uid), { role: "ceo", is_active: true, portal_access: true });
     }
 
-    // Log login event
+    // Log login event and capture the ID token for the session cookie
+    let idToken = "";
     try {
-      const idToken = await user.getIdToken();
+      idToken = await user.getIdToken(true);
       await fetch('/api/auth/log-event', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${idToken}` },
@@ -216,9 +235,13 @@ export default function LoginPage() {
       });
     } catch (err) {
       console.error("Failed to log login event:", err);
+      // Re-fetch token if the first attempt failed
+      if (!idToken) {
+        idToken = await user.getIdToken(true);
+      }
     }
 
-    goToDashboard();
+    goToDashboard(idToken);
   };
 
   const handleEmailLogin = async (e: React.FormEvent) => {

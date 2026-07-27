@@ -44,17 +44,30 @@ export function getClientInfo(request: NextRequest) {
 }
 
 export async function verifyFirebaseToken(request: NextRequest): Promise<DecodedUser | { error: string; status: number }> {
+    const sessionCookie = request.cookies.get('session')?.value;
     const authHeader = request.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-        return { error: 'Unauthorized: Missing token', status: 401 };
-    }
+    
+    let uid = '';
+    let email = '';
 
-    const token = authHeader.split('Bearer ')[1];
     try {
-        const decodedToken = await adminAuth.verifyIdToken(token);
+        if (sessionCookie) {
+            // Verify session cookie and check revocation
+            const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
+            uid = decodedClaims.uid;
+            email = decodedClaims.email || '';
+        } else if (authHeader?.startsWith('Bearer ')) {
+            // Fallback for API backward compatibility
+            const token = authHeader.split('Bearer ')[1];
+            const decodedToken = await adminAuth.verifyIdToken(token);
+            uid = decodedToken.uid;
+            email = decodedToken.email || '';
+        } else {
+            return { error: 'Unauthorized: Missing token or session', status: 401 };
+        }
         
         // Fetch user document from Firestore to check their status and portal access
-        const userDoc = await adminDb.collection('users').doc(decodedToken.uid).get();
+        const userDoc = await adminDb.collection('users').doc(uid).get();
         if (!userDoc.exists) {
             return { error: 'Unauthorized: Employee record not found', status: 401 };
         }
@@ -70,16 +83,16 @@ export async function verifyFirebaseToken(request: NextRequest): Promise<Decoded
         const correlationId = request.headers.get('x-correlation-id') || undefined;
         
         return {
-            uid: decodedToken.uid,
-            email: decodedToken.email,
+            uid,
+            email,
             role: userData.role || 'employee',
             name: userData.name || userData.displayName || '',
             correlationId,
             ...clientInfo
         };
     } catch (error: unknown) {
-        console.error('Token verification failed:', error);
-        return { error: 'Unauthorized: Invalid token', status: 401 };
+        console.error('Token/Session verification failed:', error);
+        return { error: 'Unauthorized: Invalid token or session', status: 401 };
     }
 }
 

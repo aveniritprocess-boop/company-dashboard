@@ -24,13 +24,17 @@ export function AttendanceHistory() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
+  const [errorMsg, setErrorMsg] = useState("");
+
   const loadHistory = async () => {
     if (!user) return;
+    setErrorMsg("");
     try {
       const records = await getSessionHistory(user.uid);
       setHistory(records);
     } catch (error) {
       console.error("Error loading history:", error);
+      setErrorMsg("Failed to load attendance history. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -76,6 +80,13 @@ export function AttendanceHistory() {
             disabled={history.length === 0}
         />
       </div>
+      
+      {errorMsg && (
+        <div className="bg-red-50 border-b border-red-200 px-6 py-4">
+          <p className="text-sm font-medium text-red-800">{errorMsg}</p>
+        </div>
+      )}
+
       <div className="overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="bg-gray-50 dark:bg-gray-900/50">
@@ -87,7 +98,7 @@ export function AttendanceHistory() {
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-            {history.length === 0 ? (
+            {history.length === 0 && !errorMsg ? (
               <tr>
                 <td colSpan={4} className="px-6 py-8 text-center text-gray-500">No session history found.</td>
               </tr>
@@ -101,7 +112,7 @@ export function AttendanceHistory() {
                     <div className="flex items-center gap-2">
                       {session.clockInImageUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={session.clockInImageUrl} className="h-8 w-8 rounded-full border border-gray-200 dark:border-gray-700 object-cover" alt="In" />
+                        <img src={session.clockInImageUrl} onError={(e) => { e.currentTarget.style.display = 'none'; }} className="h-8 w-8 rounded-full border border-gray-200 dark:border-gray-700 object-cover" alt="In" />
                       )}
                       <span>{session.clockInAt ? format(session.clockInAt.toDate(), "p") : "-"}</span>
                     </div>
@@ -110,7 +121,7 @@ export function AttendanceHistory() {
                     <div className="flex items-center gap-2">
                       {session.clockOutImageUrl && (
                         // eslint-disable-next-line @next/next/no-img-element
-                        <img src={session.clockOutImageUrl} className="h-8 w-8 rounded-full border border-gray-200 dark:border-gray-700 object-cover" alt="Out" />
+                        <img src={session.clockOutImageUrl} onError={(e) => { e.currentTarget.style.display = 'none'; }} className="h-8 w-8 rounded-full border border-gray-200 dark:border-gray-700 object-cover" alt="Out" />
                       )}
                       <span>{session.clockOutAt ? format(session.clockOutAt.toDate(), "p") : "Active"}</span>
                     </div>

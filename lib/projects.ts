@@ -2,6 +2,7 @@ import {
   collection,
   doc,
   addDoc,
+  updateDoc,
   serverTimestamp,
   query,
   where,
@@ -108,4 +109,41 @@ export async function getProject(projectId: string) {
     }
     return null;
   });
+}
+
+export async function updateProject(projectId: string, name: string, description: string, teamId: string) {
+  const projectRef = doc(db, "projects", projectId);
+  const projectSnap = await getDoc(projectRef);
+
+  if (projectSnap.exists()) {
+    const data = projectSnap.data() as Project;
+    const oldName = data.name;
+
+    await updateDoc(projectRef, {
+      name,
+      description,
+      teamId
+    });
+
+    try {
+      const user = auth.currentUser;
+      await logActivityClient({
+        action: "project_updated",
+        performedBy: user?.uid || "system",
+        performedByName: user?.displayName || user?.email || "Employee",
+        targetId: projectId,
+        targetType: "project",
+        details: `Updated project "${oldName}" details.`,
+        metadata: { oldName, newName: name, newDescription: description, newTeamId: teamId, action: "update_project" }
+      });
+    } catch (auditErr) {
+      console.error("Failed to log updateProject audit:", auditErr);
+    }
+
+    await broadcastNotification(
+      "Project Updated",
+      `The project "${oldName}" has been updated.`,
+      { type: "record" }
+    );
+  }
 }

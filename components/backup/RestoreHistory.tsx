@@ -48,20 +48,27 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
     }
   };
 
+  const [restoreStatus, setRestoreStatus] = useState<{msg: string, type: "success" | "error"} | null>(null);
+
   const handleRestore = async () => {
     if (!preview || !user) return;
     if (!confirm("WARNING: This will overwrite existing data. Are you sure you want to execute the restore?")) return;
     
     setLoadingRestore(true);
+    setRestoreStatus(null);
     try {
       await executeRestore(preview.backupId, preview.collections, user.uid, user.displayName || user.email || "Unknown");
-      alert("Restore completed successfully.");
-      setSelectedBackup(null);
-      setPreview(null);
-      setDryRunRes(null);
+      setRestoreStatus({ msg: "Restore completed successfully.", type: "success" });
+      setTimeout(() => {
+        setSelectedBackup(null);
+        setPreview(null);
+        setDryRunRes(null);
+        setRestoreStatus(null);
+      }, 3000);
     } catch (err) {
       console.error(err);
-      alert("Restore failed.");
+      setRestoreStatus({ msg: "Restore failed.", type: "error" });
+      setTimeout(() => setRestoreStatus(null), 3000);
     } finally {
       setLoadingRestore(false);
     }
@@ -134,7 +141,7 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
                     </div>
                   </div>
                   
-                  <div className="flex gap-3">
+                  <div className="flex gap-3 items-center">
                     <button
                       onClick={handleRestore}
                       disabled={loadingRestore}
@@ -143,6 +150,11 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
                       {loadingRestore ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
                       Confirm Restore
                     </button>
+                    {restoreStatus && (
+                      <span className={`text-sm font-bold ${restoreStatus.type === "success" ? "text-emerald-600" : "text-red-600"}`}>
+                        {restoreStatus.msg}
+                      </span>
+                    )}
                   </div>
                 </div>
               )}

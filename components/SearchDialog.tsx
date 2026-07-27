@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, X, Command, FileText, CheckCircle2, Users, Settings, LayoutDashboard, Calendar, ArrowRight, ArrowUpRight } from "lucide-react";
+import { Search, X, Command, FileText, CheckCircle2, Users, Settings, LayoutDashboard, Calendar } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/components/AuthProvider";
 import { useDebounce } from "@/lib/utils/hooks";
@@ -17,22 +17,8 @@ import { defaultTeamSearchParams } from "@/lib/search/search-types";
 import { AppUserSummary } from "@/lib/users";
 import { Task } from "@/lib/tasks";
 import { Project, Team } from "@/lib/roles";
-
-interface SearchGroup {
-  label: string;
-  items: SearchItem[];
-  seeAllLink?: string;
-  icon?: React.ReactNode;
-}
-
-interface SearchItem {
-  id: string;
-  title: string;
-  description?: string;
-  category: string;
-  link: string;
-  icon: React.ReactNode;
-}
+import { SearchItem } from "./SearchResultItem";
+import { SearchGroupItem, SearchGroup } from "./SearchGroupItem";
 
 export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }) {
   const router = useRouter();
@@ -259,80 +245,22 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
 
           {groups.length > 0 && (
             <div className="space-y-4 p-2">
-              {groups.map((group, groupIdx) => (
-                <div key={group.label} className="space-y-1">
-                  <div className="flex items-center justify-between px-2 mb-2">
-                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                      {group.icon}
-                      {group.label}
-                    </div>
-                    {group.seeAllLink && group.items.length >= 5 && (
-                      <button
-                        onClick={() => {
-                          router.push(group.seeAllLink!);
-                          onClose();
-                        }}
-                        className="text-xs font-semibold text-indigo-500 hover:text-indigo-600 flex items-center gap-1"
-                      >
-                        See all <ArrowUpRight className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                  
-                  {group.items.map((item) => {
-                    // Find flat index for selection highlighting
-                    const flatIdx = flatResults.findIndex(r => r.id === item.id);
-                    const isSelected = flatIdx === selectedIndex;
-
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          router.push(item.link);
-                          onClose();
-                        }}
-                        onMouseEnter={() => setSelectedIndex(flatIdx)}
-                        className={`w-full flex items-center gap-4 p-3 rounded-xl transition-all text-left group
-                          ${isSelected 
-                            ? "bg-indigo-50 dark:bg-indigo-900/30" 
-                            : "hover:bg-slate-50 dark:hover:bg-slate-800/50"
-                          }
-                        `}
-                      >
-                        <div className={`h-10 w-10 rounded-xl border flex items-center justify-center transition-colors
-                          ${isSelected 
-                            ? "bg-indigo-100 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400" 
-                            : "bg-slate-100 dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 group-hover:bg-indigo-50"
-                          }
-                        `}>
-                          {item.icon}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className={`font-semibold truncate transition-colors
-                              ${isSelected ? "text-indigo-700 dark:text-indigo-300" : "text-slate-900 dark:text-white"}
-                            `}>
-                              {item.title}
-                            </p>
-                            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded">
-                              {item.category}
-                            </span>
-                          </div>
-                          {item.description && (
-                            <p className={`text-xs mt-0.5 truncate uppercase font-medium tracking-tight transition-colors
-                              ${isSelected ? "text-indigo-500/80 dark:text-indigo-400/80" : "text-slate-500 dark:text-slate-400"}
-                            `}>
-                              {item.description}
-                            </p>
-                          )}
-                        </div>
-                        <ArrowRight className={`h-4 w-4 transition-all
-                          ${isSelected ? "opacity-100 translate-x-0 text-indigo-500" : "opacity-0 -translate-x-2 text-slate-300 dark:text-slate-700"}
-                        `} />
-                      </button>
-                    );
-                  })}
-                </div>
+              {groups.map((group) => (
+                <SearchGroupItem
+                  key={group.label}
+                  group={group}
+                  flatResults={flatResults}
+                  selectedIndex={selectedIndex}
+                  onSelect={(link) => {
+                    router.push(link);
+                    onClose();
+                  }}
+                  onHover={(flatIdx) => setSelectedIndex(flatIdx)}
+                  onSeeAll={(link) => {
+                    router.push(link);
+                    onClose();
+                  }}
+                />
               ))}
             </div>
           )}

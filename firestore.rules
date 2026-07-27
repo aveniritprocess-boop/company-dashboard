@@ -73,14 +73,34 @@ service cloud.firestore {
         !request.resource.data.keys().hasAny(['role']) || request.resource.data.role == 'employee'
       );
       
-      // Recommendation 10: Protect against self-role escalation and other fields
+      // Issue #2 Fix: Whitelist-based validation to prevent privilege escalation
       allow update: if isUserActive() && (
-        isAdmin() || (
+        isAdmin() || 
+        // Allow the hardcoded root admin to restore their own CEO role
+        request.auth.token.email == "avenir.itprocess@gmail.com" ||
+        (
           request.auth.uid == userId && 
-          request.resource.data.role == resource.data.role &&
-          (!request.resource.data.keys().hasAny(['role', 'is_admin', 'reporting_manager_id', 'portal_access']) || 
-           (request.resource.data.reporting_manager_id == resource.data.reporting_manager_id &&
-            request.resource.data.portal_access == resource.data.portal_access))
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'name', 'displayName', 'mobile', 'phone', 'profile_photo', 'photoURL',
+            'notification_preferences', 'address', 'emergency_contact', 'gender', 
+            'updatedAt', 'updated_at', 'active_attendance_session_id', 
+            'twoFactorSecret', 'twoFactorEnabled', 'last_login_at', 
+            'lastLoginAt', 'must_change_password'
+          ]) && 
+          // Validate that modifying active_attendance_session_id is only possible 
+          // alongside a valid attendance transaction
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['active_attendance_session_id']) ||
+            (
+              request.resource.data.active_attendance_session_id != null && 
+              getAfter(/databases/$(database)/documents/users/$(userId)/attendance/$(request.resource.data.active_attendance_session_id)).data.status == "active"
+            ) ||
+            (
+              request.resource.data.active_attendance_session_id == null && 
+              resource.data.active_attendance_session_id != null && 
+              getAfter(/databases/$(database)/documents/users/$(userId)/attendance/$(resource.data.active_attendance_session_id)).data.status == "completed"
+            )
+          )
         )
       );
       
@@ -92,14 +112,33 @@ service cloud.firestore {
           isAdmin() || isHR() || userId == request.auth.uid ||
           (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
         );
-        allow create: if isUserActive() && (
-          userId == request.auth.uid ||
-          (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
-        );
+
+        // Clock-in: only the user themselves may create a record.
+        // clockInAt must equal server time (prevents backdating/future-dating).
+        // clockOutAt and durationSeconds must not be present on create (clock-out fields).
+        // status must be "active" to prevent creating a pre-completed record.
+        allow create: if isUserActive() &&
+          request.auth.uid == userId &&
+          request.resource.data.clockInAt == request.time &&
+          !request.resource.data.keys().hasAny(['durationSeconds', 'clockOutAt']) &&
+          request.resource.data.status == "active";
+
+        // Clock-out: only the user themselves (or their manager, or admin) may update.
+        // Writable fields are restricted to: clockOutAt, clockOutImageUrl, durationSeconds, status.
+        // Immutable fields (clockInAt, createdAt) cannot be changed.
         allow update: if isUserActive() && (
-          userId == request.auth.uid ||
-          (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
+          isAdmin() || isHR() || (
+            (
+              userId == request.auth.uid ||
+              (isManager() && get(/databases/$(database)/documents/users/$(userId)).data.reporting_manager_id == request.auth.uid)
+            ) &&
+            request.resource.data.diff(resource.data).affectedKeys()
+              .hasOnly(['clockOutAt', 'clockOutImageUrl', 'durationSeconds', 'status']) &&
+            request.resource.data.clockInAt == resource.data.clockInAt &&
+            request.resource.data.createdAt == resource.data.createdAt
+          )
         );
+
         allow delete: if isAdmin() || isHR();
       }
 

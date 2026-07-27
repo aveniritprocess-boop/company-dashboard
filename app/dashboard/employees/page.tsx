@@ -35,19 +35,31 @@ function generateTempPassword(): string {
     const lower = "abcdefghijklmnopqrstuvwxyz";
     const digits = "0123456789";
     const all = upper + lower + digits;
+    
+    // Use Web Crypto API for secure random values
+    const getRandomInt = (max: number) => {
+        const array = new Uint32Array(1);
+        window.crypto.getRandomValues(array);
+        return array[0] % max;
+    };
+
     // Guarantee at least one uppercase and one digit (both required by passwordSchema)
     const guaranteed =
-        upper[Math.floor(Math.random() * upper.length)] +
-        digits[Math.floor(Math.random() * digits.length)];
+        upper[getRandomInt(upper.length)] +
+        digits[getRandomInt(digits.length)];
+        
     // Fill remaining 6 chars from the full pool (total length = 8)
     const rest = Array.from({ length: 6 }, () =>
-        all[Math.floor(Math.random() * all.length)]
+        all[getRandomInt(all.length)]
     ).join("");
-    // Shuffle so the guaranteed chars are not always at the front
-    return (guaranteed + rest)
-        .split("")
-        .sort(() => Math.random() - 0.5)
-        .join("");
+    
+    // Shuffle using Fisher-Yates and Web Crypto
+    const result = (guaranteed + rest).split("");
+    for (let i = result.length - 1; i > 0; i--) {
+        const j = getRandomInt(i + 1);
+        [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result.join("");
 }
 
 

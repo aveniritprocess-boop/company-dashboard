@@ -29,15 +29,23 @@ export default function BackupDashboardPage() {
     }
   };
 
+  const [errorMsg, setErrorMsg] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
+
   const handleManualBackup = async () => {
     if (!user) return;
     setTriggering(true);
+    setErrorMsg("");
+    setSuccessMsg("");
     try {
       await triggerBackup(user.uid, user.displayName || user.email || "Unknown");
       await loadData();
+      setSuccessMsg("Backup triggered successfully!");
+      setTimeout(() => setSuccessMsg(""), 3000);
     } catch (err) {
       console.error(err);
-      alert("Failed to trigger backup.");
+      setErrorMsg("Failed to trigger backup.");
+      setTimeout(() => setErrorMsg(""), 3000);
     } finally {
       setTriggering(false);
     }
@@ -73,6 +81,17 @@ export default function BackupDashboardPage() {
           </div>
           <div className="absolute top-0 right-0 -mr-10 -mt-10 h-32 w-32 rounded-full bg-indigo-500/10 blur-[40px]" />
         </div>
+
+        {errorMsg && (
+          <div className="rounded-lg bg-red-50 p-4 border border-red-200">
+            <p className="text-sm font-medium text-red-800">{errorMsg}</p>
+          </div>
+        )}
+        {successMsg && (
+          <div className="rounded-lg bg-green-50 p-4 border border-green-200">
+            <p className="text-sm font-medium text-green-800">{successMsg}</p>
+          </div>
+        )}
 
         {loading ? (
           <div className="animate-pulse space-y-6">

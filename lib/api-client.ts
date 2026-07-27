@@ -44,12 +44,11 @@ export async function authenticatedFetch(
     
     if (isAuthApi) {
       try {
+        await fetch("/api/auth/logout", { method: "POST" });
         await auth.signOut();
       } catch (err) {
         console.error("Error signing out from auth:", err);
       }
-      document.cookie = "session=; path=/; max-age=0; SameSite=Lax" + (window.location.protocol === "https:" ? "; Secure" : "");
-      
       if (typeof window !== "undefined") {
         window.location.href = "/login?expired=true";
       }
