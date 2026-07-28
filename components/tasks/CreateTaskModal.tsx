@@ -9,6 +9,8 @@ import { AppUserSummary } from "@/lib/users";
 import { MentionTextarea, extractMentionedUsers } from "@/components/MentionTextarea";
 import { X, Loader2, Plus, Paperclip, Trash2 } from "lucide-react";
 import { CreateTaskSchema } from "@/lib/validators/task";
+import { MultiSelect } from "@/components/ui/multi-select";
+import { Button } from "@/components/ui/button";
 
 interface CreateTaskModalProps {
   isOpen: boolean;
@@ -65,6 +67,11 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    if (assignedTo.length === 0) {
+      setError("Please select at least one assignee.");
+      return;
+    }
 
     // Zod validation
     const zodResult = CreateTaskSchema.safeParse({
@@ -148,16 +155,25 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
     }
   };
 
+  // Options for MultiSelect Assignees
+  const assigneeOptions = [
+    ...(user ? [{ label: "Self (Assign to Me)", value: user.uid }] : []),
+    ...users.filter(u => u.uid !== user?.uid).map(emp => ({
+      label: emp.name ? `${emp.name} (${emp.email})` : emp.email,
+      value: emp.uid
+    }))
+  ];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center justify-between mb-5 border-b border-slate-100 dark:border-slate-800 pb-3">
-          <h2 className="text-base font-black text-slate-900 dark:text-white uppercase tracking-wider">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="bg-background rounded-3xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto border border-border">
+        <div className="flex items-center justify-between mb-5 border-b border-border pb-3">
+          <h2 className="text-base font-black text-foreground uppercase tracking-wider">
             Create Action Task
           </h2>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-650 dark:hover:text-gray-200 hover:bg-slate-50 dark:hover:bg-slate-850 transition-colors"
+            className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
@@ -165,28 +181,28 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
 
         <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           {error && (
-            <div className="p-3 bg-red-50 dark:bg-red-950/20 text-red-700 dark:text-red-400 text-xs font-semibold rounded-lg border border-red-200 dark:border-red-900/30">
+            <div className="p-3 bg-destructive/10 text-destructive text-xs font-semibold rounded-lg border border-destructive/20">
               {error}
             </div>
           )}
 
           {/* Title */}
           <div>
-            <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
-              Task Title <span className="text-rose-500">*</span>
+            <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
+              Task Title <span className="text-destructive">*</span>
             </label>
             <input
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="What needs to be done?"
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-4 py-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+              className="w-full rounded-xl border border-border bg-background px-4 py-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-semibold"
               required
             />
           </div>
 
           {/* Description */}
           <div>
-            <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+            <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
               Description / Action Requirements
             </label>
             <MentionTextarea
@@ -195,53 +211,33 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
               users={users}
               rows={3}
               placeholder="Elaborate on details... type @ to mention someone"
-              className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-4 py-2.5 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="rounded-xl border border-border bg-background px-4 py-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
 
-          {/* Assignees */}
+          {/* Assignees (Using shadcn MultiSelect) */}
           <div>
-            <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
-              Assignee(s) <span className="text-rose-500">*</span>
+            <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
+              Assignee(s) <span className="text-destructive">*</span>
             </label>
-            <select
-              multiple
-              value={assignedTo}
-              onChange={(e) => {
-                const options = e.target.options;
-                const selected: string[] = [];
-                for (let i = 0; i < options.length; i++) {
-                  if (options[i].selected) {
-                    selected.push(options[i].value);
-                  }
-                }
-                setAssignedTo(selected);
-              }}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
-              required
-            >
-              <option value={user?.uid}>Self (Assign to Me)</option>
-              {users.filter(u => u.uid !== user?.uid).map((emp) => (
-                <option key={emp.uid} value={emp.uid}>
-                  {emp.name ? `${emp.name} (${emp.email})` : emp.email}
-                </option>
-              ))}
-            </select>
-            <span className="text-[9px] text-slate-400 font-semibold block mt-1">
-              Hold Ctrl (or Cmd) to select multiple employees.
-            </span>
+            <MultiSelect
+              options={assigneeOptions}
+              selected={assignedTo}
+              onChange={setAssignedTo}
+              placeholder="Select assignees..."
+            />
           </div>
 
           {/* Status, Priority & Team Assignment */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
                 Status
               </label>
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-bold uppercase"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer font-bold uppercase"
               >
                 <option value="pending">Pending</option>
                 <option value="in_progress">In Progress</option>
@@ -250,13 +246,13 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
               </select>
             </div>
             <div>
-              <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
                 Priority
               </label>
               <select
                 value={priority}
                 onChange={(e) => setPriority(e.target.value as Task["priority"])}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-bold uppercase"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer font-bold uppercase"
               >
                 <option value="low">Low</option>
                 <option value="medium">Medium</option>
@@ -265,13 +261,13 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
               </select>
             </div>
             <div>
-              <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
                 Team Assignment
               </label>
               <select
                 value={teamId}
                 onChange={(e) => setTeamId(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer font-semibold"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer font-semibold"
               >
                 <option value="">No Team Assigned</option>
                 {userTeams.map((t) => (
@@ -286,47 +282,47 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
           {/* Dates */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
                 Start Date
               </label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-semibold"
               />
             </div>
             <div>
-              <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+              <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
                 Due Date
               </label>
               <input
                 type="date"
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 font-semibold"
+                className="w-full rounded-xl border border-border bg-background px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary font-semibold"
               />
             </div>
           </div>
 
           {/* Attachments Section */}
-          <div className="border-t border-slate-100 dark:border-slate-800 pt-3">
-            <label className="block font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-1.5">
+          <div className="border-t border-border pt-3">
+            <label className="block font-black text-muted-foreground uppercase tracking-widest mb-1.5">
               Task Attachments
             </label>
             <div className="flex flex-wrap gap-2 mb-2">
               {attachments.map((file, idx) => (
                 <div
                   key={idx}
-                  className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 px-3 py-1.5 rounded-lg border border-slate-100 dark:border-slate-750 text-slate-700 dark:text-slate-300 text-[10px]"
+                  className="flex items-center gap-2 bg-muted px-3 py-1.5 rounded-lg border border-border text-foreground text-[10px]"
                 >
-                  <Paperclip className="h-3 w-3 text-slate-400 shrink-0" />
+                  <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
                   <span className="truncate max-w-[120px] font-semibold">{file.name}</span>
-                  <span className="text-[9px] text-slate-400">({file.size})</span>
+                  <span className="text-[9px] text-muted-foreground">({file.size})</span>
                   <button
                     type="button"
                     onClick={() => handleRemoveAttachment(idx)}
-                    className="p-0.5 rounded text-slate-400 hover:text-red-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition"
+                    className="p-0.5 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition"
                   >
                     <Trash2 className="h-3 w-3" />
                   </button>
@@ -344,7 +340,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
             <button
               type="button"
               onClick={() => document.getElementById("quick-task-file-uploader")?.click()}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-dashed border-slate-200 hover:border-indigo-500 dark:border-slate-800 hover:text-indigo-600 dark:hover:text-indigo-400 rounded-xl text-slate-500 dark:text-slate-400 font-bold uppercase transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary rounded-xl font-bold uppercase transition"
             >
               <Plus className="h-3.5 w-3.5" />
               Add Attachment File
@@ -352,23 +348,24 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
           </div>
 
           {/* Actions Footer */}
-          <div className="flex gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <button
+          <div className="flex gap-3 pt-4 border-t border-border">
+            <Button
               type="button"
+              variant="outline"
               onClick={onClose}
               disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-5 rounded-xl border-border text-xs font-bold transition-colors disabled:opacity-50"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
               type="submit"
               disabled={submitting}
-              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-750 text-white font-bold text-xs uppercase transition-colors disabled:opacity-60"
+              className="flex-1 flex items-center justify-center gap-1.5 px-4 py-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs uppercase transition-colors disabled:opacity-60"
             >
               {submitting && <Loader2 className="h-3 w-3 animate-spin" />}
               Create Action Item
-            </button>
+            </Button>
           </div>
         </form>
       </div>

@@ -1808,10 +1808,10 @@ export default function EmployeesDashboard() {
                                                     {u.exit_details?.exit_type?.replace('_', ' ') || '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-xs font-semibold text-slate-600 dark:text-slate-300">
-                                                    {typeof (u as any).archived_by_name === 'string' ? (u as any).archived_by_name : (u as any).archived_by || '-'}
+                                                    {typeof (u as Record<string, unknown>).archived_by_name === 'string' ? (u as Record<string, unknown>).archived_by_name as string : (u as Record<string, unknown>).archived_by as string || '-'}
                                                 </td>
                                                 <td className="px-6 py-4 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                                                    {u.updated_at ? (typeof u.updated_at === 'string' ? new Date(u.updated_at).toLocaleDateString() : ((u.updated_at as any)?.toDate ? (u.updated_at as any).toDate().toLocaleDateString() : '-')) : '-'}
+                                                    {u.updated_at ? (typeof u.updated_at === 'string' ? new Date(u.updated_at).toLocaleDateString() : ((u.updated_at as Record<string, unknown>)?.toDate ? (u.updated_at as { toDate: () => Date }).toDate().toLocaleDateString() : '-')) : '-'}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     {hasPermission("edit_employee") && (
@@ -2222,7 +2222,7 @@ export default function EmployeesDashboard() {
                                     {rolesList.map(r => (
                                         <th key={r.id} className="px-6 py-4 text-center">
                                             <div className="flex flex-col items-center">
-                                                <span className="font-black text-slate-850 dark:text-white">{r.name}</span>
+                                                <span className="font-black text-slate-900 dark:text-white">{r.name}</span>
                                                 <span className="text-[7px] text-slate-400 font-bold tracking-wider mt-0.5">{r.id}</span>
                                                 {!r.is_system && (
                                                     <button 

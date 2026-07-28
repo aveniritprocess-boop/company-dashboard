@@ -375,7 +375,7 @@ export default function MonitoringPage() {
                 {listeners.map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between border-b border-slate-50 dark:border-slate-800/40 pb-3 last:border-0 last:pb-0">
                     <div>
-                      <p className="text-sm font-semibold text-slate-850 dark:text-slate-200 font-mono text-xs">{item.name}</p>
+                      <p className="text-sm font-semibold text-slate-900 dark:text-slate-200 font-mono text-xs">{item.name}</p>
                       <p className="text-[10px] text-slate-400 mt-0.5">Real-time observer</p>
                     </div>
                     <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${

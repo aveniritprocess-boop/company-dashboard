@@ -68,13 +68,13 @@ export async function POST(request: NextRequest) {
         try {
             await adminAuth.updateUser(uid, { disabled: true });
             await adminAuth.revokeRefreshTokens(uid);
-        } catch (err) {
-            console.error("Auth account disable/token revocation failed:", err);
+        } catch (error: unknown) {
+            console.error("Auth account disable/token revocation failed:", error);
             // We continue even if auth fails, as the user might only exist in Firestore
         }
 
         // 4. Update status in Firestore to archived (Soft Delete) and store exit details
-        const updateData: any = {
+        const updateData: Record<string, unknown> = {
             is_deleted: true,
             is_active: false,
             portal_access: false,

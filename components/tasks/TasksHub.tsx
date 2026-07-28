@@ -383,7 +383,7 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
                       }`} />
                       {col.title}
                     </h4>
-                    <span className="bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px] font-black text-slate-655 dark:text-slate-300">
+                    <span className="bg-slate-200/60 dark:bg-slate-800 px-2 py-0.5 rounded-full text-[10px] font-black text-slate-700 dark:text-slate-300">
                       {col.tasks.length}
                     </span>
                   </div>
