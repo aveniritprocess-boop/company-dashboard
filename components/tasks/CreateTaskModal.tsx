@@ -217,7 +217,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
                 }
                 setAssignedTo(selected);
               }}
-              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-850 dark:text-slate-150 focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
+              className="w-full rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 h-24"
               required
             >
               <option value={user?.uid}>Self (Assign to Me)</option>
@@ -357,7 +357,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
               type="button"
               onClick={onClose}
               disabled={submitting}
-              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-655 hover:bg-slate-50 dark:text-slate-450 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
+              className="flex-1 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800 transition-colors disabled:opacity-50"
             >
               Cancel
             </button>

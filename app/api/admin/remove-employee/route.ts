@@ -23,11 +23,25 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can archive employees' }, { status: 403 });
         }
 
-        // 2. Parse and validate target user ID
+        // 2. Parse and validate target user ID and exit details
         const body = await request.json();
-        const validation = parseOrError(UidBodySchema, body);
-        if ('response' in validation) return validation.response;
-        const { uid } = validation.data;
+        
+        const uid = body.uid;
+        if (!uid || typeof uid !== 'string') {
+            return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
+        }
+        
+        const exitDate = body.exitDate;
+        if (!exitDate || typeof exitDate !== 'string') {
+            return NextResponse.json({ error: 'Exit Date is required' }, { status: 400 });
+        }
+
+        const exitType = body.exitType;
+        if (!exitType || typeof exitType !== 'string') {
+            return NextResponse.json({ error: 'Exit Type is required' }, { status: 400 });
+        }
+
+        const exitReason = body.exitReason || "";
 
         // Fetch employee details for validation and audit trail
         const targetDoc = await adminDb.collection('users').doc(uid).get();
@@ -37,20 +51,30 @@ export async function POST(request: NextRequest) {
         const targetData = targetDoc.data() || {};
         const targetName = targetData.name || 'Unknown';
 
+        // Idempotency check: if already archived, return immediately
+        if (targetData.status === "archived") {
+            return NextResponse.json({
+                success: true,
+                alreadyArchived: true
+            });
+        }
+
         // Security role restriction: only CEO can remove/archive 'ceo' or 'admin' accounts
         if ((targetData.role?.toLowerCase() === 'ceo' || targetData.role?.toLowerCase() === 'admin') && user.role.toLowerCase() !== 'ceo') {
             return NextResponse.json({ error: 'Forbidden: Only the CEO can archive CEO or Admin accounts' }, { status: 403 });
         }
 
-        // 3. Revoke active session tokens
+        // 3. Disable Firebase Authentication account and revoke active session tokens
         try {
+            await adminAuth.updateUser(uid, { disabled: true });
             await adminAuth.revokeRefreshTokens(uid);
         } catch (err) {
-            console.error("Token revocation failed:", err);
+            console.error("Auth account disable/token revocation failed:", err);
+            // We continue even if auth fails, as the user might only exist in Firestore
         }
 
-        // 4. Update status in Firestore to archived (Soft Delete)
-        await adminDb.collection('users').doc(uid).update({
+        // 4. Update status in Firestore to archived (Soft Delete) and store exit details
+        const updateData: any = {
             is_deleted: true,
             is_active: false,
             portal_access: false,
@@ -58,8 +82,15 @@ export async function POST(request: NextRequest) {
             archived_at: new Date(),
             archived_by: user.uid,
             archived_by_name: user.name || user.email || 'Admin',
-            updated_at: new Date()
-        });
+            updated_at: new Date(),
+            exit_details: {
+                exit_date: exitDate,
+                exit_type: exitType,
+                reason: exitReason
+            }
+        };
+
+        await adminDb.collection('users').doc(uid).update(updateData);
 
         // 5. Create Audit Log
         await logActivityServer({
@@ -68,11 +99,12 @@ export async function POST(request: NextRequest) {
             performedByName: user.name || user.email || 'Admin',
             targetId: uid,
             targetType: "user",
-            details: `Archived/Soft-deleted employee record for ${targetName} (${targetData?.employee_id || 'N/A'}). Portal access revoked.`,
+            details: `Archived/Soft-deleted employee record for ${targetName} (${targetData?.employee_id || 'N/A'}). Exit Type: ${exitType}. Portal access revoked and account disabled.`,
             correlationId: user.correlationId,
             metadata: {
                 targetName,
-                employee_id: targetData?.employee_id || 'N/A'
+                employee_id: targetData?.employee_id || 'N/A',
+                exit_type: exitType
             },
             ip: user.ip,
             browser: user.browser,

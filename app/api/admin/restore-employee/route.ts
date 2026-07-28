@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import { FieldValue } from "firebase-admin/firestore";
+import { adminAuth, adminDb } from '@/lib/firebase-admin';
 import { verifyFirebaseToken } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
@@ -38,32 +39,49 @@ export async function POST(request: NextRequest) {
         const targetData = targetDoc.data() || {};
         const targetName = targetData.name || 'Unknown';
 
+        // Idempotency check: if already active, return immediately
+        if (targetData.status === "active") {
+            return NextResponse.json({
+                success: true,
+                alreadyActive: true
+            });
+        }
+
         // Security role restriction: only CEO can restore 'ceo' or 'admin' accounts
         const isTargetCEOOrAdmin = targetData.role?.toLowerCase() === 'ceo' || targetData.role?.toLowerCase() === 'admin';
         if (isTargetCEOOrAdmin && user.role.toLowerCase() === 'hr') {
             return NextResponse.json({ error: 'Forbidden: HR cannot restore CEO or Admin profiles' }, { status: 403 });
         }
 
-        // 3. Update status in Firestore to active (Restore)
+        // 3. Re-enable Firebase Authentication account
+        try {
+            await adminAuth.updateUser(uid, { disabled: false });
+        } catch (err) {
+            console.error("Auth account enable failed:", err);
+            // We continue even if auth fails, as the user might only exist in Firestore
+        }
+
+        // 4. Update status in Firestore to active (Restore) and clear exit details
         await adminDb.collection('users').doc(uid).update({
             is_deleted: false,
             is_active: true,
             portal_access: true,
             status: "active",
-            archived_at: null,
-            archived_by: null,
-            archived_by_name: null,
+            archived_at: FieldValue.delete(),
+            archived_by: FieldValue.delete(),
+            archived_by_name: FieldValue.delete(),
+            exit_details: FieldValue.delete(),
             updated_at: new Date()
         });
 
-        // 4. Create Audit Log
+        // 5. Create Audit Log
         await logActivityServer({
             action: "employee_updated",
             performedBy: user.uid,
             performedByName: user.name || user.email || 'Admin',
             targetId: uid,
             targetType: "user",
-            details: `Restored archived employee record for ${targetName} (${targetData?.employee_id || 'N/A'}). Reactivated and enabled portal access.`,
+            details: `Restored archived employee record for ${targetName} (${targetData?.employee_id || 'N/A'}). Reactivated, cleared exit details, and enabled auth account.`,
             correlationId: user.correlationId,
             metadata: {
                 targetName,

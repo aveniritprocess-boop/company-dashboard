@@ -12,7 +12,7 @@ import { authenticatedFetch } from "@/lib/api-client";
 import { CreateEmployeeSchema } from "@/lib/validators/employee";
 import { ResetPasswordSchema } from "@/lib/validators/auth";
 import {
-    Users, UserPlus, MoreVertical, Shield, Loader2, CheckCircle2, XCircle, KeyRound, Lock, Unlock, Download, Check, X, BarChart2, GitFork, ClipboardCheck, LayoutGrid, AlertCircle, Mail, Upload, FileText, Trash2, RotateCcw, ArrowLeft, ArrowRight
+    Users, UserPlus, MoreVertical, Shield, Loader2, CheckCircle2, XCircle, KeyRound, Lock, Unlock, Download, Check, X, BarChart2, GitFork, ClipboardCheck, LayoutGrid, AlertCircle, Mail, Upload, FileText, Trash2, RotateCcw, ArrowLeft, ArrowRight, Archive
 } from "lucide-react";
 import { ExportMenu } from "@/components/export/ExportMenu";
 
@@ -166,7 +166,7 @@ export default function EmployeesDashboard() {
     const [searchResults, setSearchResults] = useState<AppUserSummary[]>([]);
     
     // UI control states
-    const [activeTab, setActiveTab] = useState<"registry" | "orgchart" | "analytics" | "approvals" | "roles" | "audit">("registry");
+    const [activeTab, setActiveTab] = useState<"registry" | "orgchart" | "analytics" | "approvals" | "roles" | "audit" | "archived">("registry");
     const [currentPage, setCurrentPage] = useState(1);
     const [itemsPerPage] = useState(10);
     const sortField: keyof AppUserSummary = "name";
@@ -640,33 +640,40 @@ export default function EmployeesDashboard() {
     const handleOffboardSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!showOffboardModal) return;
-        if (confirmOffboardName.trim() !== showOffboardModal.name?.trim()) {
+        
+        const targetName = showOffboardModal.name || showOffboardModal.email || "Unknown";
+        
+        if (confirmOffboardName.trim().toLowerCase() !== targetName.trim().toLowerCase()) {
             showToast("Confirmation name does not match the employee's name.", "error");
             return;
         }
+        
         setOffboardingSubmitting(true);
         try {
             // Offboarding marks as archived (soft-delete), logs details, and revokes tokens
             const response = await authenticatedFetch("/api/admin/remove-employee", {
                 method: "POST",
-                body: JSON.stringify({ uid: showOffboardModal.uid })
+                body: JSON.stringify({ 
+                    uid: showOffboardModal.uid,
+                    exitDate,
+                    exitType,
+                    exitReason
+                })
             });
 
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.error || "Failed to archive employee");
 
-            // Save offboarding reason metadata in Firestore
-            await updateDoc(doc(db, "users", showOffboardModal.uid), {
-                exit_details: {
-                    exit_date: exitDate,
-                    exit_type: exitType,
-                    reason: exitReason
-                }
-            });
+            if (result.alreadyArchived) {
+                showToast(`${targetName} is already archived.`, "success");
+            } else {
+                showToast(`${targetName} archived successfully`, "success");
+            }
 
-            showToast(`${showOffboardModal.name} archived successfully`, "success");
             setShowOffboardModal(null);
             setExitReason("");
+            setExitType("resigned");
+            setExitDate(new Date().toISOString().split("T")[0]);
             setConfirmOffboardName("");
         } catch (error: unknown) {
             const err = error as Error;
@@ -678,6 +685,8 @@ export default function EmployeesDashboard() {
 
     const handleReactivateSubmit = async () => {
         if (!showReactivateModal) return;
+        
+        const targetName = showReactivateModal.name || showReactivateModal.email || "Unknown";
         try {
             // Restore endpoint restores is_deleted: false, is_active: true, status: active
             const response = await authenticatedFetch("/api/admin/restore-employee", {
@@ -688,7 +697,12 @@ export default function EmployeesDashboard() {
             const result = await response.json();
             if (!response.ok || !result.success) throw new Error(result.error || "Failed to restore employee");
 
-            showToast(`${showReactivateModal.name} restored and reactivated successfully.`, "success");
+            if (result.alreadyActive) {
+                showToast(`${targetName} is already active.`, "success");
+            } else {
+                showToast(`${targetName} restored and reactivated successfully.`, "success");
+            }
+            
             setShowReactivateModal(null);
         } catch (error: unknown) {
             const err = error as Error;
@@ -1185,15 +1199,20 @@ export default function EmployeesDashboard() {
     const managers = users.filter(u => u.role === "manager" || u.role === "admin" || u.role === "ceo" || u.role === "super_admin");
 
 
-    // Dashboard metrics (excludes soft-deleted employees for Total, Active)
-    const activeNonDeletedUsers = users.filter(u => !u.is_deleted);
+    // Dashboard metrics (excludes soft-deleted/archived employees for Total, Active)
+    const activeNonDeletedUsers = users.filter(u => !u.is_deleted && u.status !== "archived");
+    const archivedUsers = users.filter(u => u.is_deleted || u.status === "archived");
+    
     const totalEmployees = activeNonDeletedUsers.length;
     const activeEmployees = activeNonDeletedUsers.filter(u => u.is_active && !u.is_locked).length;
     const inactiveEmployees = activeNonDeletedUsers.filter(u => !u.is_active || u.is_locked).length;
     const uniqueDepartments = new Set(activeNonDeletedUsers.filter(u => u.department).map(u => u.department?.trim().toLowerCase())).size;
 
-    // Filter Logic
-    const filteredUsers = isSearching ? searchResults : users.filter(u => !u.is_deleted);
+    // Filter Logic based on Active Tab
+    const baseSource = activeTab === "archived" ? archivedUsers : activeNonDeletedUsers;
+    const filteredUsers = isSearching 
+        ? searchResults.filter(u => activeTab === "archived" ? (u.status === "archived" || u.is_deleted) : (u.status !== "archived" && !u.is_deleted))
+        : baseSource;
 
     // Sorting Logic
     const sortedUsers = [...filteredUsers].sort((a, b) => {
@@ -1273,7 +1292,7 @@ export default function EmployeesDashboard() {
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-16">
             {toast && (
-                <div className={`fixed top-8 right-8 z-50 px-6 py-3 rounded-2xl shadow-2xl text-sm font-bold text-white transition-all animate-in slide-in-from-right-4 ${toast.type === "success" ? "bg-emerald-600" : "bg-red-500"}`}>
+                <div className={`fixed top-8 right-8 z-[60] px-6 py-3 rounded-2xl shadow-2xl text-sm font-bold text-white transition-all animate-in slide-in-from-right-4 ${toast.type === "success" ? "bg-emerald-600" : "bg-red-500"}`}>
                     <div className="flex items-center gap-2">
                         {toast.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
                         {toast.msg}
@@ -1330,6 +1349,13 @@ export default function EmployeesDashboard() {
                 >
                     <LayoutGrid className="h-4 w-4" />
                     Directory Registry
+                </button>
+                <button 
+                    onClick={() => setActiveTab("archived")} 
+                    className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "archived" ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"}`}
+                >
+                    <Archive className="h-4 w-4" />
+                    Archived Employees
                 </button>
                 <button 
                     onClick={() => setActiveTab("orgchart")} 
@@ -1685,6 +1711,149 @@ export default function EmployeesDashboard() {
                                     >
                                         Load More
                                     </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* TAB: ARCHIVED EMPLOYEES */}
+            {activeTab === "archived" && (
+                <div className="space-y-6">
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 shadow-sm flex items-center gap-4">
+                        <div className="h-12 w-12 rounded-2xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+                            <Archive className="h-6 w-6" />
+                        </div>
+                        <div>
+                            <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Total Archived</span>
+                            <h3 className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{archivedUsers.length}</h3>
+                        </div>
+                    </div>
+                    
+                    <div className="mb-4 space-y-4">
+                        <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                            <h2 className="text-lg font-bold text-slate-800 dark:text-white">Archived Records</h2>
+                        </div>
+                        <EmployeeSearchPanel 
+                            onSearch={async (params) => {
+                                if (!params.query && params.role === "all" && params.status === "all" && params.department === "all" && params.employeeType === "all" && params.portalAccess === "all") {
+                                    setIsSearching(false);
+                                    setSearchResults([]);
+                                    setCurrentPage(1);
+                                    return;
+                                }
+                                setIsSearching(true);
+                                try {
+                                    const result = await searchEmployees(params, 500);
+                                    setSearchResults(result.items);
+                                    setCurrentPage(1);
+                                } catch (error) {
+                                    console.error("Employee search failed:", error);
+                                }
+                            }}
+                        />
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl shadow-sm overflow-hidden">
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-800/5">
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Employee</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Department</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Designation</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Exit Date</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Exit Type</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Archived By</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Archived At</th>
+                                        <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest whitespace-nowrap">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 dark:divide-slate-800/50">
+                                    {paginatedUsers.length === 0 ? (
+                                        <tr>
+                                            <td colSpan={7} className="px-6 py-12 text-center text-slate-400 text-sm font-medium">
+                                                No archived employees found.
+                                            </td>
+                                        </tr>
+                                    ) : (
+                                        paginatedUsers.map(u => (
+                                            <tr key={u.uid} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
+                                                <td className="px-6 py-4">
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="h-10 w-10 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden flex-shrink-0 flex items-center justify-center border border-slate-200 dark:border-slate-700">
+                                                            {u.profile_photo ? (
+                                                                <img src={u.profile_photo} alt={u.name || "User"} className="h-full w-full object-cover" />
+                                                            ) : (
+                                                                <Users className="h-5 w-5 text-slate-400" />
+                                                            )}
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-slate-900 dark:text-white text-sm group-hover:text-indigo-600 transition-colors">{u.name || 'N/A'}</div>
+                                                            <div className="text-[10px] font-bold text-slate-400">{u.email || 'N/A'}</div>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                                <td className="px-6 py-4 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                                    {u.department || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                                    {u.designation || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs font-bold text-rose-500">
+                                                    {u.exit_details?.exit_date || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                                    {u.exit_details?.exit_type?.replace('_', ' ') || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                                                    {typeof (u as any).archived_by_name === 'string' ? (u as any).archived_by_name : (u as any).archived_by || '-'}
+                                                </td>
+                                                <td className="px-6 py-4 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                                    {u.updated_at ? (typeof u.updated_at === 'string' ? new Date(u.updated_at).toLocaleDateString() : ((u.updated_at as any)?.toDate ? (u.updated_at as any).toDate().toLocaleDateString() : '-')) : '-'}
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    {hasPermission("edit_employee") && (
+                                                        <button 
+                                                            onClick={() => setShowReactivateModal(u)}
+                                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-[10px] font-black uppercase tracking-wider rounded-lg transition-colors"
+                                                        >
+                                                            <RotateCcw className="h-3 w-3" />
+                                                            Restore Profile
+                                                        </button>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </div>
+                        {/* Pagination Footer */}
+                        <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-center bg-slate-50/50 dark:bg-slate-800/5 gap-4">
+                            <span className="text-xs text-slate-400 font-bold">
+                                Showing {filteredUsers.length} of {archivedUsers.length} employees
+                                {totalPages > 1 && ` (Page ${currentPage} of ${totalPages})`}
+                            </span>
+                            <div className="flex items-center gap-3">
+                                {totalPages > 1 && (
+                                    <div className="flex gap-2">
+                                        <button 
+                                            disabled={currentPage === 1} 
+                                            onClick={() => setCurrentPage(c => c - 1)}
+                                            className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
+                                        >
+                                            Prev
+                                        </button>
+                                        <button 
+                                            disabled={currentPage === totalPages} 
+                                            onClick={() => setCurrentPage(c => c + 1)}
+                                            className="px-3.5 py-1.5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-xl text-xs font-bold disabled:opacity-50 transition-all hover:bg-slate-50"
+                                        >
+                                            Next
+                                        </button>
+                                    </div>
                                 )}
                             </div>
                         </div>
@@ -2611,7 +2780,7 @@ export default function EmployeesDashboard() {
                             </div>
                         </div>
 
-                        <form onSubmit={handleOffboardSubmit} className="space-y-4 text-left">
+                        <div className="space-y-4 text-left">
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Exit Classification</label>
                                 <select value={exitType} onChange={e => setExitType(e.target.value as "resigned" | "terminated" | "retired" | "contract_ended")} className="w-full px-4 py-2.5 rounded-xl border border-slate-150 dark:border-slate-800 bg-slate-50 dark:bg-slate-800 text-xs font-semibold focus:outline-none bg-white dark:bg-slate-955">
@@ -2634,7 +2803,7 @@ export default function EmployeesDashboard() {
 
                             <div className="space-y-1.5">
                                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">
-                                    Type <span className="font-extrabold text-rose-500">{showOffboardModal.name}</span> to confirm
+                                    Type <span className="font-extrabold text-rose-500">{showOffboardModal.name || showOffboardModal.email || "Unknown"}</span> to confirm
                                 </label>
                                 <input 
                                     type="text" 
@@ -2649,15 +2818,16 @@ export default function EmployeesDashboard() {
                             <div className="flex gap-3 pt-2">
                                 <button type="button" onClick={() => setShowOffboardModal(null)} className="flex-1 py-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-xl transition-all">Cancel</button>
                                 <button 
-                                    type="submit" 
-                                    disabled={offboardingSubmitting || confirmOffboardName.trim() !== showOffboardModal.name?.trim()} 
+                                    type="button" 
+                                    onClick={handleOffboardSubmit}
+                                    disabled={offboardingSubmitting || confirmOffboardName.trim().toLowerCase() !== (showOffboardModal.name || showOffboardModal.email || "Unknown").trim().toLowerCase()} 
                                     className="flex-1 py-3 bg-rose-500 hover:bg-rose-600 disabled:bg-rose-500/50 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-500/20 flex items-center justify-center gap-2"
                                 >
                                     {offboardingSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                                     Archive Record
                                 </button>
                             </div>
-                        </form>
+                        </div>
                     </div>
                 </div>
             )}
