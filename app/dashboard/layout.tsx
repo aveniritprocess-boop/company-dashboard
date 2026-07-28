@@ -19,9 +19,6 @@ export default async function DashboardLayout({
     await adminAuth.verifySessionCookie(sessionCookie, true);
   } catch (error) {
     console.error("Session verification failed:", error);
-    // Delete the invalid cookie to break the infinite redirect loop
-    const store = await cookies();
-    store.delete("session");
     redirect("/login");
   }
 
