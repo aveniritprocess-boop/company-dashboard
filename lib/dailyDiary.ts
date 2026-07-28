@@ -142,3 +142,27 @@ export function subscribeToRecentDiaryEntries(
     callback(entries);
   });
 }
+
+export function subscribeToRecentDiaryEntriesForUser(
+  userId: string,
+  days: number,
+  callback: (entries: DailyDiaryEntry[]) => void
+): () => void {
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - days);
+  
+  const q = query(
+    collection(db, COLLECTION),
+    where("userId", "==", userId),
+    where("createdAt", ">=", cutoffDate),
+    orderBy("createdAt", "desc")
+  );
+
+  return onSnapshot(q, (snapshot) => {
+    const entries = snapshot.docs.map((d) => ({
+      id: d.id,
+      ...d.data(),
+    })) as DailyDiaryEntry[];
+    callback(entries);
+  });
+}

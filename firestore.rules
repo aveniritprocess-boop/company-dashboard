@@ -55,12 +55,12 @@ service cloud.firestore {
              (taskData.assigned_to is list && userId in taskData.assigned_to);
     }
     
-    function canReadTask(taskId) {
+    function canReadTask() {
       return isUserActive() && (
         isAdmin() ||
-        getTaskData(taskId).assignedBy == request.auth.uid ||
-        getTaskData(taskId).assigned_by == request.auth.uid ||
-        isAssignedToUser(getTaskData(taskId), request.auth.uid)
+        resource.data.assignedBy == request.auth.uid ||
+        resource.data.assigned_by == request.auth.uid ||
+        isAssignedToUser(resource.data, request.auth.uid)
       );
     }
 
@@ -154,7 +154,7 @@ service cloud.firestore {
 
     // Tasks collection
     match /tasks/{taskId} {
-      allow read: if canReadTask(taskId);
+      allow read: if canReadTask();
       
       allow create: if isAdmin() || isManager();
       

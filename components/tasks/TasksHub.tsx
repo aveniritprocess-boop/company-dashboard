@@ -10,7 +10,11 @@ import {
   subscribeToAllTasks,
   subscribeToAllTasksForUser
 } from "@/lib/tasks";
-import { subscribeToRecentDiaryEntries, DailyDiaryEntry } from "@/lib/dailyDiary";
+import { 
+  subscribeToRecentDiaryEntries, 
+  subscribeToRecentDiaryEntriesForUser,
+  DailyDiaryEntry 
+} from "@/lib/dailyDiary";
 import { getAllUsers, AppUserSummary } from "@/lib/users";
 import {
   Plus, 
@@ -76,6 +80,7 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
 
 
   const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
+  const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
 
   // Load user dictionary on mount
   useEffect(() => {
@@ -89,7 +94,7 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
 
     let unsub: () => void;
     // Admins/CEOs/Managers see all tasks for the company dashboard
-    if (isAdminOrManager) {
+    if (isAdmin) {
       unsub = subscribeToAllTasks((data) => {
         setTasks(data);
         setLoading(false);
@@ -103,15 +108,16 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
     }
 
     return () => unsub?.();
-  }, [user, role, isAdminOrManager]);
+  }, [user, role, isAdmin]);
 
   // Listen to diary entries
   useEffect(() => {
-    const unsub = subscribeToRecentDiaryEntries(2, (data) => {
-      setDiaryEntries(data);
-    });
+    if (!user) return;
+    const unsub = isAdmin
+      ? subscribeToRecentDiaryEntries(2, setDiaryEntries)
+      : subscribeToRecentDiaryEntriesForUser(user.uid, 2, setDiaryEntries);
     return () => unsub();
-  }, []);
+  }, [user, isAdmin]);
 
   // User Map
   const userMap = useMemo(() => {

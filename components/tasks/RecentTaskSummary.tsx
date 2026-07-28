@@ -11,6 +11,7 @@ import {
 } from "@/lib/tasks";
 import {
   subscribeToRecentDiaryEntries,
+  subscribeToRecentDiaryEntriesForUser,
   DailyDiaryEntry,
 } from "@/lib/dailyDiary";
 import { getAllUsers, AppUserSummary } from "@/lib/users";
@@ -131,6 +132,7 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
+  const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
 
   // Load users once
   useEffect(() => {
@@ -141,7 +143,7 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
   useEffect(() => {
     if (!user) return;
     let unsub: () => void;
-    if (isAdminOrManager) {
+    if (isAdmin) {
       unsub = subscribeToRecentTasks(timeWindowDays, (data) => {
         setTasks(data);
         setLoading(false);
@@ -153,16 +155,16 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
       });
     }
     return () => unsub?.();
-  }, [user, role, timeWindowDays, isAdminOrManager]);
+  }, [user, role, timeWindowDays, isAdmin]);
 
   // Subscribe to diary entries
   useEffect(() => {
-    if (!showDiary) return;
-    const unsub = subscribeToRecentDiaryEntries(timeWindowDays, (data) => {
-      setDiaryEntries(data);
-    });
+    if (!showDiary || !user) return;
+    const unsub = isAdmin 
+      ? subscribeToRecentDiaryEntries(timeWindowDays, setDiaryEntries)
+      : subscribeToRecentDiaryEntriesForUser(user.uid, timeWindowDays, setDiaryEntries);
     return () => unsub();
-  }, [showDiary, timeWindowDays]);
+  }, [showDiary, timeWindowDays, user, isAdmin]);
 
   // Build user map
   const userMap = useMemo(() => {
