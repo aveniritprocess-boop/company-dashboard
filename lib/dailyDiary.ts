@@ -131,7 +131,8 @@ export function subscribeToRecentDiaryEntries(
   const q = query(
     collection(db, COLLECTION),
     where("createdAt", ">=", cutoffDate),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "desc"),
+    limit(100)
   );
 
   return onSnapshot(q, (snapshot) => {
@@ -155,7 +156,8 @@ export function subscribeToRecentDiaryEntriesForUser(
     collection(db, COLLECTION),
     where("userId", "==", userId),
     where("createdAt", ">=", cutoffDate),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "desc"),
+    limit(100)
   );
 
   return onSnapshot(q, (snapshot) => {

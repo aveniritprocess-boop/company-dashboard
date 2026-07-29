@@ -90,7 +90,14 @@ export async function POST(request: NextRequest) {
             }
         };
 
-        await adminDb.collection('users').doc(uid).update(updateData);
+        const batch = adminDb.batch();
+        batch.update(adminDb.collection('users').doc(uid), updateData);
+        batch.update(adminDb.collection('employee_directory').doc(uid), {
+            is_active: false,
+            portal_access: false,
+            status: "archived"
+        });
+        await batch.commit();
 
         // 5. Create Audit Log
         await logActivityServer({

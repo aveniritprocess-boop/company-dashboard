@@ -552,7 +552,8 @@ export function subscribeToRecentTasks(
   const q = query(
     collection(db, TASKS_COLLECTION),
     where("createdAt", ">=", cutoffDate),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "desc"),
+    limit(100)
   );
 
   const cleanupMonitor = trackListener(`subscribeToRecentTasks-${days}`);
@@ -584,7 +585,8 @@ export function subscribeToRecentTasksForUser(
     collection(db, TASKS_COLLECTION),
     where("assignedTo", "array-contains", userId),
     where("createdAt", ">=", cutoffDate),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "desc"),
+    limit(100)
   );
 
   // Query tasks assigned by user
@@ -592,7 +594,8 @@ export function subscribeToRecentTasksForUser(
     collection(db, TASKS_COLLECTION),
     where("assignedBy", "==", userId),
     where("createdAt", ">=", cutoffDate),
-    orderBy("createdAt", "desc")
+    orderBy("createdAt", "desc"),
+    limit(100)
   );
 
   const merged = new Map<string, Task>();

@@ -71,7 +71,11 @@ export async function POST(request: NextRequest) {
         });
 
         // 4. Store additional data in Firestore
-        await adminDb.collection('users').doc(userRecord.uid).set({
+        const batch = adminDb.batch();
+        const userRef = adminDb.collection('users').doc(userRecord.uid);
+        const dirRef = adminDb.collection('employee_directory').doc(userRecord.uid);
+        
+        batch.set(userRef, {
             uid: userRecord.uid,
             name,
             email,
@@ -98,6 +102,22 @@ export async function POST(request: NextRequest) {
             created_at: new Date(),
             updated_at: new Date(),
         });
+        
+        batch.set(dirRef, {
+            uid: userRecord.uid,
+            name,
+            displayName: name,
+            email,
+            role: role || "employee",
+            department: department || "",
+            designation: designation || "",
+            profile_photo: profile_photo || "",
+            status: status || "active",
+            is_active: is_active !== undefined ? is_active : true,
+            portal_access: portal_access !== undefined ? portal_access : true,
+        });
+        
+        await batch.commit();
 
         // 5. Create Audit Log
         await logActivityServer({

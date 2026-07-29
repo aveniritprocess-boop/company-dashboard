@@ -13,7 +13,7 @@ export default function ProjectDetailsPage() {
     const [project, setProject] = useState<Project | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const fetch = useCallback(async () => {
+    const loadData = useCallback(async () => {
         if(!projectId) return;
         const data = await getProject(projectId);
         setProject(data);
@@ -21,8 +21,9 @@ export default function ProjectDetailsPage() {
     }, [projectId]);
 
     useEffect(() => {
-        fetch();
-    }, [fetch]);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        loadData();
+    }, [loadData]);
 
     if (loading) return <div className="p-8">Loading project...</div>;
     if (!project) return <div className="p-8">Project not found</div>;
@@ -34,7 +35,7 @@ export default function ProjectDetailsPage() {
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{project.name}</h1>
                     <p className="mt-2 text-gray-500">{project.description}</p>
                 </div>
-                <EditProjectDialog project={project} onProjectUpdated={fetch} />
+                <EditProjectDialog project={project} onProjectUpdated={loadData} />
             </div>
             
             <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">

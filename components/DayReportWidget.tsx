@@ -6,7 +6,6 @@ import { subscribeToAllDiaryEntriesByDate, subscribeToDiaryEntries, DailyDiaryEn
 import { getAllUsers } from "@/lib/users";
 import { 
   ClipboardList, 
-  Calendar, 
   User, 
   CheckCircle2, 
   Clock,
@@ -38,6 +37,7 @@ export function DayReportWidget() {
 
     useEffect(() => {
         if (!user) return;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setLoading(true);
 
         let unsubDiary: () => void;

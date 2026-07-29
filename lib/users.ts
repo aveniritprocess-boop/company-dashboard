@@ -1,4 +1,4 @@
-import { collection, getDocs, onSnapshot, doc, getDoc, DocumentData, query, limit, orderBy } from "firebase/firestore";
+import { collection, getDocs, onSnapshot, doc, getDoc, DocumentData, query } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export interface AppUserSummary {
@@ -71,13 +71,31 @@ function mapDocToUser(uid: string, data: DocumentData): AppUserSummary {
 import { monitorQuery, trackListener } from "./firestore-monitor";
 
 export async function getAllUsers(limitCount?: number): Promise<AppUserSummary[]> {
-    return monitorQuery("getAllUsers", "users", async () => {
-        let q = query(collection(db, "users"), orderBy("name", "asc"));
-        if (limitCount) {
-            q = query(q, limit(limitCount));
-        }
+    return monitorQuery("getAllUsers", "employee_directory", async () => {
+        const q = query(collection(db, "employee_directory"));
         const snap = await getDocs(q);
-        return snap.docs.map((d) => mapDocToUser(d.id, d.data()));
+        
+        console.log("Firestore Returned :", snap.size);
+
+        let users = snap.docs.map((d) => mapDocToUser(d.id, d.data()));
+        console.log("Mapped Users       :", users.length);
+        
+        // Filter out deleted or inactive users
+        users = users.filter(u => u.is_deleted !== true && u.is_active !== false);
+        console.log("Filtered Users     :", users.length);
+        
+        // Sort in memory by name
+        users.sort((a, b) => {
+            const nameA = (a.name || "").toLowerCase();
+            const nameB = (b.name || "").toLowerCase();
+            return nameA.localeCompare(nameB);
+        });
+
+        if (limitCount) {
+            users = users.slice(0, limitCount);
+        }
+        
+        return users;
     });
 }
 
@@ -86,15 +104,34 @@ export function subscribeToAllUsers(
   limitCount?: number
 ): () => void {
   const cleanupMonitor = trackListener("subscribeToAllUsers");
-  const collectionRef = collection(db, "users");
-  let q = query(collectionRef, orderBy("name", "asc"));
-  if (limitCount) {
-    q = query(q, limit(limitCount));
-  }
-  const unsub = onSnapshot(q, (snapshot) => {
-    const users = snapshot.docs.map((d) => mapDocToUser(d.id, d.data()));
+  const collectionRef = collection(db, "employee_directory");
+  
+  const q = query(collectionRef);
+  
+  const unsub = onSnapshot(q, (snap) => {
+    console.log("Firestore Returned :", snap.size);
+
+    let users = snap.docs.map((d) => mapDocToUser(d.id, d.data()));
+    console.log("Mapped Users       :", users.length);
+    
+    // Filter out deleted or inactive users
+    users = users.filter(u => u.is_deleted !== true && u.is_active !== false);
+    console.log("Filtered Users     :", users.length);
+    
+    // Sort in memory
+    users.sort((a, b) => {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+    
+    if (limitCount) {
+        users = users.slice(0, limitCount);
+    }
+
     callback(users);
   });
+  
   return () => {
     unsub();
     cleanupMonitor();

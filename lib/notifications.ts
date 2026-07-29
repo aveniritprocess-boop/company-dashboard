@@ -31,7 +31,6 @@ export interface AppNotification {
 }
 
 const NOTIFICATIONS_COLLECTION = "notifications";
-const MAIL_COLLECTION = "mail";
 
 export async function sendEmail(
   to: string | string[],

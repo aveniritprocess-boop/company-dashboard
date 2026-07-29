@@ -13,11 +13,12 @@ service cloud.firestore {
     // Recommendation 9: isActiveUser check
     // Block disabled, locked, deleted, or portal-revoked accounts at the database layer
     function isUserActive() {
-      return isSignedIn() &&
-             (getUserData().is_active == true || !getUserData().keys().hasAny(['is_active'])) &&
-             (getUserData().is_locked == false || !getUserData().keys().hasAny(['is_locked'])) &&
-             (getUserData().is_deleted == false || !getUserData().keys().hasAny(['is_deleted'])) &&
-             (getUserData().portal_access == true || !getUserData().keys().hasAny(['portal_access']));
+      let data = getUserData();
+      return isSignedIn() && data != null &&
+             data.get('is_active', true) == true &&
+             data.get('is_locked', false) == false &&
+             data.get('is_deleted', false) == false &&
+             data.get('portal_access', true) == true;
     }
     
     function isRole(role) {
@@ -73,17 +74,19 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isSignedIn() && (
+      allow get: if isSignedIn() && (
         (request.auth.uid == userId && 
          (resource == null || (
-           (resource.data.is_active == true || !resource.data.keys().hasAny(['is_active'])) &&
-           (resource.data.is_locked == false || !resource.data.keys().hasAny(['is_locked'])) &&
-           (resource.data.is_deleted == false || !resource.data.keys().hasAny(['is_deleted'])) &&
-           (resource.data.portal_access == true || !resource.data.keys().hasAny(['portal_access']))
+           resource.data.get('is_active', true) == true &&
+           resource.data.get('is_locked', false) == false &&
+           resource.data.get('is_deleted', false) == false &&
+           resource.data.get('portal_access', true) == true
          ))
         ) ||
         (request.auth.uid != userId && isUserActive())
       );
+      
+      allow list: if isUserActive() && (isRole('ceo') || isRole('super_admin') || isRole('admin') || isRole('manager'));
       
       // Allow new users to create their user record on first sign-in
       allow create: if isSignedIn() && request.auth.uid == userId && (
@@ -93,6 +96,7 @@ service cloud.firestore {
       // Issue #2 Fix: Whitelist-based validation to prevent privilege escalation
       allow update: if isUserActive() && (
         isAdmin() || 
+        // Allow the hardcoded root admin to restore their own CEO role
         // Allow the hardcoded root admin to restore their own CEO role
         request.auth.token.email == "avenir.itprocess@gmail.com" ||
         (
@@ -167,6 +171,12 @@ service cloud.firestore {
         allow update: if isUserActive() && userId == request.auth.uid;
         allow delete: if isUserActive() && userId == request.auth.uid;
       }
+    }
+
+    // Employee Directory (Public read-only for active employees)
+    match /employee_directory/{userId} {
+      allow read: if isUserActive();
+      allow write: if false; // Only backend can update directory
     }
 
     // Tasks collection

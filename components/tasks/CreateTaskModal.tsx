@@ -164,6 +164,10 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
     }))
   ];
 
+  console.log("Assignee Options   :", assigneeOptions.length);
+
+  // We will trace MultiSelect inline below
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
       <div className="bg-background rounded-3xl shadow-2xl w-full max-w-xl p-6 max-h-[90vh] overflow-y-auto border border-border">

@@ -10,11 +10,16 @@ import { VerifyEmailNotice } from "@/components/VerifyEmailNotice";
 import { CommandMenu } from "@/components/CommandMenu";
 import { ToastProvider } from "@/components/ToastProvider";
 
+import { ErrorBoundary } from "@/components/ErrorBoundary";
+
+import { trace } from "@/lib/trace";
+
 export function DashboardClientLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  trace("DashboardClientLayout renders children");
   const { user, mustChangePassword, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -64,7 +69,9 @@ export function DashboardClientLayout({
                 : "overflow-y-auto p-4 sm:p-8 scroll-smooth"
               }`}
           >
-            {children}
+            <ErrorBoundary>
+              {!user.emailVerified ? <VerifyEmailNotice /> : children}
+            </ErrorBoundary>
           </main>
         </div>
       </div>

@@ -62,7 +62,8 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Update status in Firestore to active (Restore) and clear exit details
-        await adminDb.collection('users').doc(uid).update({
+        const batch = adminDb.batch();
+        batch.update(adminDb.collection('users').doc(uid), {
             is_deleted: false,
             is_active: true,
             portal_access: true,
@@ -73,6 +74,14 @@ export async function POST(request: NextRequest) {
             exit_details: FieldValue.delete(),
             updated_at: new Date()
         });
+        
+        batch.update(adminDb.collection('employee_directory').doc(uid), {
+            is_active: true,
+            portal_access: true,
+            status: "active"
+        });
+        
+        await batch.commit();
 
         // 5. Create Audit Log
         await logActivityServer({

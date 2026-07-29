@@ -38,6 +38,8 @@ export function MultiSelect({
   onChange,
   placeholder = "Select items...",
 }: MultiSelectProps) {
+  console.log("Rendered Options   :", options.length);
+
   const [open, setOpen] = React.useState(false)
 
   const handleUnselect = (item: string) => {

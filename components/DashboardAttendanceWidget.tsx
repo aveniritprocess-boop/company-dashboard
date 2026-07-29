@@ -4,7 +4,10 @@ import { useAttendanceSession } from "@/hooks/useAttendanceSession";
 import { AttendanceTimer } from "@/components/attendance/AttendanceTimer";
 import { Sparkles } from "lucide-react";
 
+import { trace } from "@/lib/trace";
+
 export function DashboardAttendanceWidget() {
+  trace("DashboardAttendanceWidget mounts");
   const { activeSession, elapsedSeconds, loading } = useAttendanceSession();
 
   if (loading) {
@@ -23,7 +26,7 @@ export function DashboardAttendanceWidget() {
         </div>
         <AttendanceTimer seconds={elapsedSeconds} />
         <p className="text-xs text-primary dark:text-primary mt-2">
-            Started: {activeSession.clockInAt?.toDate().toLocaleTimeString()}
+            Started: {activeSession.clockInAt?.toDate?.()?.toLocaleTimeString() ?? 'Pending...'}
         </p>
       </div>
     );

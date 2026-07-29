@@ -14,7 +14,7 @@ export default function TeamDetailsPage() {
     const [team, setTeam] = useState<Team | null>(null);
     const [loading, setLoading] = useState(true);
 
-    const fetch = useCallback(async () => {
+    const loadData = useCallback(async () => {
         if(!teamId) return;
         const data = await getTeam(teamId);
         setTeam(data);
@@ -22,8 +22,9 @@ export default function TeamDetailsPage() {
     }, [teamId]);
 
     useEffect(() => {
-        fetch();
-    }, [fetch]);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        loadData();
+    }, [loadData]);
 
     if (loading) return <div className="p-8">Loading team...</div>;
     if (!team) return <div className="p-8">Team not found</div>;
@@ -35,7 +36,7 @@ export default function TeamDetailsPage() {
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{team.name}</h1>
                     <p className="mt-2 text-gray-500">Manage your team members and settings.</p>
                 </div>
-                <EditTeamDialog teamId={teamId} currentName={team.name} onTeamUpdated={fetch} />
+                <EditTeamDialog teamId={teamId} currentName={team.name} onTeamUpdated={loadData} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

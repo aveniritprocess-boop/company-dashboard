@@ -71,7 +71,18 @@ export async function POST(request: NextRequest) {
         }
 
         // 4. Update Firestore user status
-        await docRef.update(updatePayload);
+        const batch = adminDb.batch();
+        batch.update(docRef, updatePayload);
+        
+        const dirPayload: Record<string, unknown> = {};
+        if (is_active !== undefined) dirPayload.is_active = is_active;
+        if (portal_access !== undefined) dirPayload.portal_access = portal_access;
+        // status is not strictly toggled here but is_active is what employee_directory cares about
+        
+        if (Object.keys(dirPayload).length > 0) {
+            batch.update(adminDb.collection('employee_directory').doc(uid), dirPayload);
+        }
+        await batch.commit();
 
         // 5. If access is disabled, revoke refresh tokens
         const shouldRevoke = 

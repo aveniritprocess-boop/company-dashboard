@@ -42,21 +42,41 @@ export async function POST(request: NextRequest) {
 
         const targetId = requestData.target_id;
         const targetName = requestData.target_name;
+        const userRef = adminDb.collection('users').doc(targetId);
 
         if (action === 'approve') {
-            // Apply changes to target user in Firestore
-            await adminDb.collection('users').doc(targetId).update({
+            const batch = adminDb.batch();
+            
+            // Apply changes to the main user profile
+            batch.update(userRef, {
                 ...requestData.changes,
                 updated_at: new Date()
             });
+            
+            // Extract public fields for the directory update
+            const dirPayload: Record<string, unknown> = {};
+            const publicFields = ['name', 'displayName', 'email', 'role', 'department', 'designation', 'profile_photo', 'status', 'is_active', 'portal_access'];
+            for (const field of publicFields) {
+                if (requestData.changes[field] !== undefined) {
+                    dirPayload[field] = requestData.changes[field];
+                    // Also update displayName if name is changed
+                    if (field === 'name') dirPayload.displayName = requestData.changes[field];
+                }
+            }
+            
+            if (Object.keys(dirPayload).length > 0) {
+                batch.set(adminDb.collection('employee_directory').doc(targetId), dirPayload, { merge: true });
+            }
 
             // Update queue document
-            await requestRef.update({
+            batch.update(requestRef, {
                 status: 'approved',
                 reviewed_by: user.uid,
                 review_note: review_note || '',
                 updated_at: new Date()
             });
+            
+            await batch.commit();
 
             // Format details message
             const diffKeys = Object.keys(requestData.changes || {});

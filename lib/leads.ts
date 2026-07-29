@@ -50,7 +50,7 @@ export async function addLead(
 ) {
   const col = COLLECTIONS[type];
   const now = serverTimestamp();
-  const leadRef = await addDoc(collection(db, col), {
+  await addDoc(collection(db, col), {
     ...data,
     type,
     createdAt: now,

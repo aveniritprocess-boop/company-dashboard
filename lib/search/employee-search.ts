@@ -1,10 +1,10 @@
-import { collection, query, where, orderBy, getDocs, limit, startAfter, onSnapshot, QueryDocumentSnapshot, Query } from "firebase/firestore";
+import { collection, query, where, getDocs, limit, startAfter, QueryDocumentSnapshot, Query, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { AppUserSummary } from "@/lib/users";
 import { EmployeeSearchParams, SearchPage } from "./search-types";
 import { EmployeeSearchSchema } from "@/lib/validators/search";
 
-const USERS_COL = "users";
+const USERS_COL = "employee_directory";
 
 export function buildEmployeeQuery(params: EmployeeSearchParams): Query {
   const coll = collection(db, USERS_COL);
@@ -39,27 +39,6 @@ export function buildEmployeeQuery(params: EmployeeSearchParams): Query {
   }
   if (params.joiningDateTo) {
     q = query(q, where("joining_date", "<=", params.joiningDateTo));
-  }
-
-  // Apply sorting
-  switch (params.sortBy) {
-    case "name_asc":
-      q = query(q, orderBy("name", "asc"));
-      break;
-    case "name_desc":
-      q = query(q, orderBy("name", "desc"));
-      break;
-    case "joining_asc":
-      q = query(q, orderBy("joining_date", "asc"));
-      break;
-    case "joining_desc":
-      q = query(q, orderBy("joining_date", "desc"));
-      break;
-    case "recently_added":
-      q = query(q, orderBy("created_at", "desc"));
-      break;
-    default:
-      q = query(q, orderBy("name", "asc"));
   }
 
   return q;
@@ -145,13 +124,22 @@ export function subscribeToDirectory(
 ): () => void {
   const q = query(
     collection(db, USERS_COL),
-    where("is_deleted", "==", false),
-    orderBy("name", "asc"),
-    limit(pageSize)
+    where("is_deleted", "==", false)
   );
 
   return onSnapshot(q, (snap) => {
-    const users = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as AppUserSummary));
+    let users = snap.docs.map(doc => ({ uid: doc.id, ...doc.data() } as AppUserSummary));
+    
+    users.sort((a, b) => {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    if (pageSize) {
+        users = users.slice(0, pageSize);
+    }
+    
     callback(users);
   }, (error) => {
     console.error("Directory subscription error:", error);

@@ -116,6 +116,7 @@ interface RecentTaskSummaryProps {
 }
 
 export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: RecentTaskSummaryProps) {
+  // Removed trace
   const { user, role } = useAuth();
 
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -194,8 +195,8 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
     (showDiary ? diaryEntries : []).map((e) => ({
       id: e.id,
       type: "diary",
-      title: e.description.slice(0, 80) + (e.description.length > 80 ? "…" : ""),
-      description: e.description,
+      title: (e.description || "").slice(0, 80) + (((e.description || "").length > 80) ? "…" : ""),
+      description: e.description || "",
       assignees: [e.userId],
       status: e.status,
       updatedAt: toDate(e.updatedAt) || toDate(e.createdAt),

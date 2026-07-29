@@ -160,7 +160,25 @@ export async function POST(request: NextRequest) {
         }
 
         // 6. Update Firestore
-        await docRef.update(updatePayload);
+        const batch = adminDb.batch();
+        batch.update(docRef, updatePayload);
+        
+        // Prepare directory update payload (only if public fields changed)
+        const dirPayload: Record<string, unknown> = {};
+        const publicFields = ['name', 'email', 'role', 'department', 'designation', 'profile_photo', 'status', 'is_active', 'portal_access'];
+        for (const field of publicFields) {
+            if (updatePayload[field] !== undefined) {
+                dirPayload[field] = updatePayload[field];
+                if (field === 'name') dirPayload.displayName = updatePayload[field];
+            }
+        }
+        
+        if (Object.keys(dirPayload).length > 0) {
+            const dirRef = adminDb.collection('employee_directory').doc(uid);
+            batch.set(dirRef, dirPayload, { merge: true });
+        }
+        
+        await batch.commit();
 
         // 7. Write to Audit Logs
         const isStatusChanged = 

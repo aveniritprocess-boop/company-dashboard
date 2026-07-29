@@ -16,7 +16,10 @@ const DayReportWidget = dynamic(() => import("@/components/DayReportWidget").the
 const QuickTaskWidget = dynamic(() => import("@/components/tasks/QuickTaskWidget").then(mod => ({ default: mod.QuickTaskWidget })), { ssr: false });
 import { Sparkles } from "lucide-react";
 
+import { trace } from "@/lib/trace";
+
 export default function DashboardPage() {
+    trace("Dashboard Page renders");
     const { user } = useAuth();
 
     const getGreeting = () => {
