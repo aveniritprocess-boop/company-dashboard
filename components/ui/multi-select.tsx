@@ -50,12 +50,13 @@ export function MultiSelect({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+      <PopoverTrigger>
         <Button
           variant="outline"
           role="combobox"
           aria-expanded={open}
           className="w-full justify-between h-auto min-h-10 font-normal border-border bg-background hover:bg-background"
+          onClick={() => setOpen(!open)}
         >
           <div className="flex flex-wrap gap-1">
             {selectedOptions.length === 0 && (

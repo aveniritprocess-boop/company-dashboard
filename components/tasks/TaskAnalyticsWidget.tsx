@@ -31,7 +31,8 @@ export function TaskAnalyticsWidget() {
         console.error("Failed to load users for analytics", e);
       }
     }
-    if (role === "admin" || role === "ceo" || role === "manager") {
+    // Only admins/CEO load all users; managers/employees only need their own tasks
+    if (role === "admin" || role === "ceo" || role === "super_admin") {
       loadUsers();
     }
   }, [role]);
@@ -41,7 +42,7 @@ export function TaskAnalyticsWidget() {
 
     let unsub: () => void;
     
-    if (role === "admin" || role === "ceo" || role === "manager") {
+    if (role === "admin" || role === "ceo" || role === "super_admin") {
       unsub = subscribeToAllTasks((data, last) => {
         setTasks(data);
         setLastDoc(last);
@@ -49,6 +50,7 @@ export function TaskAnalyticsWidget() {
         setLoading(false);
       }, 20);
     } else {
+      // Managers, team leads, and employees see only their own tasks
       unsub = subscribeToUserTasks(user.uid, (data, last) => {
         setTasks(data);
         setLastDoc(last);

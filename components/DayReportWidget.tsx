@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { subscribeToAllDiaryEntriesByDate, DailyDiaryEntry } from "@/lib/dailyDiary";
-import { subscribeToAllUsers } from "@/lib/users";
+import { subscribeToAllDiaryEntriesByDate, subscribeToDiaryEntries, DailyDiaryEntry } from "@/lib/dailyDiary";
+import { getAllUsers } from "@/lib/users";
 import { 
   ClipboardList, 
   Calendar, 
@@ -16,34 +16,48 @@ import {
 } from "lucide-react";
 
 export function DayReportWidget() {
-    const { user } = useAuth();
+    const { user, role } = useAuth();
+    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
     const [entries, setEntries] = useState<DailyDiaryEntry[]>([]);
     const [users, setUsers] = useState<Record<string, string>>({});
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(true);
 
+    // One-time user name fetch (no real-time listener needed for a lookup map)
+    useEffect(() => {
+        getAllUsers()
+            .then((fetchedUsers) => {
+                const userMap: Record<string, string> = {};
+                fetchedUsers.forEach(u => {
+                    userMap[u.uid] = u.name || "Unknown User";
+                });
+                setUsers(userMap);
+            })
+            .catch(console.error);
+    }, []);
+
     useEffect(() => {
         if (!user) return;
+        setLoading(true);
 
-        // Fetch users for name mapping
-        const unsubUsers = subscribeToAllUsers((fetchedUsers) => {
-            const userMap: Record<string, string> = {};
-            fetchedUsers.forEach(u => {
-                userMap[u.uid] = u.name || "Unknown User";
+        let unsubDiary: () => void;
+        if (isAdmin) {
+            // Admins/CEO see all diary entries for the selected date
+            unsubDiary = subscribeToAllDiaryEntriesByDate(selectedDate, (fetchedEntries) => {
+                setEntries(fetchedEntries);
+                setLoading(false);
             });
-            setUsers(userMap);
-        });
+        } else {
+            // Managers/employees see only their own diary entries for the selected date
+            unsubDiary = subscribeToDiaryEntries(user.uid, (fetchedEntries) => {
+                const filtered = fetchedEntries.filter(e => e.date === selectedDate);
+                setEntries(filtered);
+                setLoading(false);
+            });
+        }
 
-        const unsubDiary = subscribeToAllDiaryEntriesByDate(selectedDate, (fetchedEntries) => {
-            setEntries(fetchedEntries);
-            setLoading(false);
-        });
-
-        return () => {
-            unsubUsers();
-            unsubDiary();
-        };
-    }, [user, selectedDate]);
+        return () => unsubDiary?.();
+    }, [user, isAdmin, selectedDate]);
 
     const changeDate = (days: number) => {
         const date = new Date(selectedDate);

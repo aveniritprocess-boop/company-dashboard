@@ -159,7 +159,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   const assigneeOptions = [
     ...(user ? [{ label: "Self (Assign to Me)", value: user.uid }] : []),
     ...users.filter(u => u.uid !== user?.uid).map(emp => ({
-      label: emp.name ? `${emp.name} (${emp.email})` : emp.email,
+      label: emp.name ? `${emp.name} (${emp.email ?? ""})` : (emp.email ?? emp.uid),
       value: emp.uid
     }))
   ];

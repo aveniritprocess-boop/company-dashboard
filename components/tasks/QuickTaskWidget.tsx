@@ -32,6 +32,7 @@ export function QuickTaskWidget() {
   const [commentTask, setCommentTask] = useState<Task | null>(null);
 
   const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
+  const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
 
   // Load all users for list & autocomplete
   useEffect(() => {
@@ -44,12 +45,14 @@ export function QuickTaskWidget() {
     Promise.resolve().then(() => setLoading(true));
 
     let unsub: () => void;
-    if (isAdminOrManager) {
+    if (isAdmin) {
+      // Admins/CEO see all tasks globally
       unsub = subscribeToAllTasksNoLimit((data) => {
         setTasks(data);
         setLoading(false);
       });
     } else {
+      // Managers and employees see only their own tasks
       unsub = subscribeToAllTasksForUser(user.uid, (data) => {
         setTasks(data);
         setLoading(false);
@@ -57,7 +60,7 @@ export function QuickTaskWidget() {
     }
 
     return () => unsub?.();
-  }, [user, role, isAdminOrManager]);
+  }, [user, role, isAdmin]);
 
   // Resolving names dictionary
   const userMap = useMemo(() => {

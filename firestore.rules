@@ -64,6 +64,17 @@ service cloud.firestore {
       );
     }
 
+    // For subcollection reads where we need to check the parent task
+    function canAccessParentTask(taskId) {
+      let taskData = get(/databases/$(database)/documents/tasks/$(taskId)).data;
+      return isUserActive() && (
+        isAdmin() ||
+        taskData.assignedBy == request.auth.uid ||
+        taskData.assigned_by == request.auth.uid ||
+        isAssignedToUser(taskData, request.auth.uid)
+      );
+    }
+
     // Users collection
     match /users/{userId} {
       allow read: if isUserActive();
@@ -171,8 +182,8 @@ service cloud.firestore {
 
       // Comments subcollection under tasks/{taskId}
       match /comments/{commentId} {
-        allow read: if canReadTask(taskId);
-        allow create: if canReadTask(taskId) && request.resource.data.commentedBy == request.auth.uid;
+        allow read: if canAccessParentTask(taskId);
+        allow create: if canAccessParentTask(taskId) && request.resource.data.commentedBy == request.auth.uid;
         allow update, delete: if isUserActive() && (
           isAdmin() || resource.data.commentedBy == request.auth.uid
         );

@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { subscribeToRecentTasks, Task } from "@/lib/tasks";
+import { useAuth } from "@/components/AuthProvider";
+import { subscribeToRecentTasks, subscribeToRecentTasksForUser, Task } from "@/lib/tasks";
 import { getAllUsers, AppUserSummary } from "@/lib/users";
 import { Search, Filter, Loader2, CheckCircle2, Clock, ListTodo, AlignLeft, Eye } from "lucide-react";
 import { TaskDetailsModal } from "./TaskDetailsModal";
 
 export function AdminTaskSummaryWidget() {
+    const { user, role } = useAuth();
+    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
     const [tasks, setTasks] = useState<Task[]>([]);
     const [employees, setEmployees] = useState<AppUserSummary[]>([]);
     const [loading, setLoading] = useState(true);
@@ -20,10 +23,19 @@ export function AdminTaskSummaryWidget() {
             try {
                 const users = await getAllUsers();
                 setEmployees(users);
-                unsubTasks = subscribeToRecentTasks(2, (data) => {
-                    setTasks(data);
+                if (isAdmin) {
+                    unsubTasks = subscribeToRecentTasks(2, (data) => {
+                        setTasks(data);
+                        setLoading(false);
+                    });
+                } else if (user) {
+                    unsubTasks = subscribeToRecentTasksForUser(user.uid, 2, (data) => {
+                        setTasks(data);
+                        setLoading(false);
+                    });
+                } else {
                     setLoading(false);
-                });
+                }
             } catch (error) {
                 console.error("Failed to load summary data", error);
                 setLoading(false);
@@ -33,7 +45,7 @@ export function AdminTaskSummaryWidget() {
         return () => {
             if (unsubTasks) unsubTasks();
         };
-    }, []);
+    }, [user, isAdmin]);
 
     const employeeMap = new Map<string, string>();
     employees.forEach(e => employeeMap.set(e.uid, e.name || "Unknown User"));

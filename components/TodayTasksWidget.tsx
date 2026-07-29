@@ -1,75 +1,79 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
-import { subscribeToAllTasks, subscribeToTaskComments, Task, TaskComment } from "@/lib/tasks";
-import { subscribeToAllUsers } from "@/lib/users";
+import { subscribeToAllTasks, subscribeToAllTasksForUser, Task } from "@/lib/tasks";
+import { getAllUsers } from "@/lib/users";
 import {
     CheckCircle2,
     Clock,
-    MessageSquare,
     User,
     Calendar,
     ChevronRight
 } from "lucide-react";
 import Link from "next/link";
 
-interface TaskWithComments extends Task {
-    lastComment?: TaskComment;
-}
-
 export function TodayTasksWidget() {
-    const { user } = useAuth();
-    const [tasks, setTasks] = useState<TaskWithComments[]>([]);
+    const { user, role } = useAuth();
+    const [tasks, setTasks] = useState<Task[]>([]);
     const [users, setUsers] = useState<Record<string, string>>({});
     const [loading, setLoading] = useState(true);
+    // Track if component is still mounted to avoid state updates after unmount
+    const mountedRef = useRef(true);
+
+    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+
+    // Load user names once (one-time fetch, not a real-time listener)
+    useEffect(() => {
+        getAllUsers()
+            .then((fetchedUsers) => {
+                if (!mountedRef.current) return;
+                const userMap: Record<string, string> = {};
+                fetchedUsers.forEach(u => {
+                    userMap[u.uid] = u.name || "Unknown User";
+                });
+                setUsers(userMap);
+            })
+            .catch(console.error);
+
+        return () => { mountedRef.current = false; };
+    }, []);
 
     useEffect(() => {
         if (!user) return;
 
-        // Fetch users for name mapping
-        const unsubUsers = subscribeToAllUsers((fetchedUsers) => {
-            const userMap: Record<string, string> = {};
-            fetchedUsers.forEach(u => {
-                userMap[u.uid] = u.name || "Unknown User";
-            });
-            setUsers(userMap);
-        });
-
-        // Fetch today's tasks
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const unsubTasks = subscribeToAllTasks((allTasks) => {
-            // Filter tasks created today
-            const todayTasks = allTasks.filter(task => {
+        const filterToday = (allTasks: Task[]): Task[] =>
+            allTasks.filter(task => {
                 const createdAt = task.createdAt as { toDate?: () => Date };
-                const taskDate = createdAt?.toDate ? createdAt.toDate() : new Date();
-                taskDate.setHours(0, 0, 0, 0);
-                return taskDate.getTime() === today.getTime();
+                const taskDate = createdAt?.toDate ? createdAt.toDate() : new Date(0);
+                const taskDay = new Date(taskDate);
+                taskDay.setHours(0, 0, 0, 0);
+                return taskDay.getTime() === today.getTime();
             });
 
-            setTasks(todayTasks as TaskWithComments[]);
-            setLoading(false);
+        let unsub: () => void;
 
-            // For each today's task, subscribe to comments to get the "people response"
-            todayTasks.forEach(task => {
-                subscribeToTaskComments(task.id, (comments) => {
-                    if (comments.length > 0) {
-                        const lastComment = comments[comments.length - 1];
-                        setTasks(prev => prev.map(t =>
-                            t.id === task.id ? { ...t, lastComment } : t
-                        ));
-                    }
-                });
+        if (isAdmin) {
+            // Admins/CEO see all tasks created today (with limit for perf)
+            unsub = subscribeToAllTasks((allTasks) => {
+                if (!mountedRef.current) return;
+                setTasks(filterToday(allTasks));
+                setLoading(false);
+            }, 50);
+        } else {
+            // Managers and employees see only their own tasks
+            unsub = subscribeToAllTasksForUser(user.uid, (allTasks) => {
+                if (!mountedRef.current) return;
+                setTasks(filterToday(allTasks));
+                setLoading(false);
             });
-        });
+        }
 
-        return () => {
-            unsubUsers();
-            unsubTasks();
-        };
-    }, [user]);
+        return () => unsub?.();
+    }, [user, role, isAdmin]);
 
     if (loading) {
         return (
@@ -90,10 +94,10 @@ export function TodayTasksWidget() {
                 <div>
                     <h3 className="text-lg font-black text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
                         <Calendar className="h-5 w-5 text-indigo-500" />
-                        Today&apos;s Tasks & Status
+                        Today&apos;s Tasks &amp; Status
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-1">
-                        Live overview of today&apos;s assignments and responses.
+                        Live overview of today&apos;s assignments.
                     </p>
                 </div>
                 <Link
@@ -134,11 +138,11 @@ export function TodayTasksWidget() {
                                                 : users[task.assignedTo as string] || "User"
                                             }
                                         </div>
-                                        <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${task.status === 'completed' || task.status === 'done'
-                                            ? 'text-emerald-500'
-                                            : 'text-amber-500'
+                                        <div className={`flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider ${task.status === "completed" || task.status === "done"
+                                            ? "text-emerald-500"
+                                            : "text-amber-500"
                                             }`}>
-                                            {task.status === 'completed' || task.status === 'done'
+                                            {task.status === "completed" || task.status === "done"
                                                 ? <CheckCircle2 className="h-3 w-3" />
                                                 : <Clock className="h-3 w-3" />
                                             }
@@ -147,22 +151,6 @@ export function TodayTasksWidget() {
                                     </div>
                                 </div>
                             </div>
-
-                            {task.lastComment && (
-                                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-700/50">
-                                    &quot;{task.lastComment.comment}&quot;
-                                    <div className="flex items-start gap-2 bg-white dark:bg-slate-900/50 p-2 rounded-xl">
-                                        <MessageSquare className="h-3 w-3 text-indigo-400 mt-0.5 shrink-0" />
-                                        <div className="min-w-0">
-                                            <p className="text-[10px] font-bold text-indigo-500 mb-0.5">
-                                                {task.lastComment.commentedByName || "User"} response:
-                                            </p>
-                                            <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2 italic leading-relaxed">
-                                            </p>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     ))}
                 </div>

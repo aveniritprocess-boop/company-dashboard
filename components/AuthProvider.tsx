@@ -1,10 +1,9 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, useMemo } from "react";
+import { createContext, useContext, useEffect, useState, useMemo, useRef } from "react";
 import { User, onAuthStateChanged } from "firebase/auth";
-import { doc, onSnapshot, updateDoc, collection, getDocFromServer } from "firebase/firestore";
+import { doc, onSnapshot, updateDoc, collection, getDocs, getDocFromServer } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
-import { initializeRolesAndPermissions } from "@/lib/init-db";
 import { trackListener } from "@/lib/firestore-monitor";
 
 interface AuthContextType {
@@ -33,53 +32,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     const [mustChangePassword, setMustChangePassword] = useState(false);
     const [rolesList, setRolesList] = useState<{ id: string; name: string; permissions: Record<string, boolean>; is_system?: boolean }[]>([]);
     const [loading, setLoading] = useState(true);
+    const lastUidRef = useRef<string | null>(null);
 
     // Auth State Changed Listener
     useEffect(() => {
-        let unsubRoles: (() => void) | null = null;
         let unsubDoc: (() => void) | null = null;
 
         const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
             setUser(firebaseUser);
 
-            if (unsubRoles) { unsubRoles(); unsubRoles = null; }
             if (unsubDoc) { unsubDoc(); unsubDoc = null; }
 
             if (firebaseUser) {
-                // Initialize default roles in database
-                if (typeof window !== "undefined") {
-                    const initialized = sessionStorage.getItem("roles_initialized");
-                    const initializing = sessionStorage.getItem("roles_initializing");
-
-                    if (!initialized && !initializing) {
-                        sessionStorage.setItem("roles_initializing", "true");
-                        initializeRolesAndPermissions(db)
-                            .then(() => {
-                                sessionStorage.setItem("roles_initialized", "true");
-                            })
-                            .catch((err: unknown) => {
-                                console.error("Failed to seed default roles and permissions:", err);
-                                sessionStorage.removeItem("roles_initialized");
-                            })
-                            .finally(() => {
-                                sessionStorage.removeItem("roles_initializing");
-                            });
-                    }
+                // One-time fetch of roles (not a real-time listener — roles rarely change)
+                if (rolesList.length === 0) {
+                    getDocs(collection(db, "roles"))
+                        .then((snap) => {
+                            const list = snap.docs.map(d => ({
+                                id: d.id,
+                                name: d.data().name || d.id,
+                                permissions: d.data().permissions || {},
+                                is_system: !!d.data().is_system
+                            }));
+                            setRolesList(list);
+                        })
+                        .catch((err) => console.error("Failed to fetch roles:", err));
                 }
-
-                // Subscribe to the roles collection in real time
-                const cleanupRoles = trackListener("AuthProvider-roles");
-                unsubRoles = onSnapshot(collection(db, "roles"), (snap) => {
-                    const list = snap.docs.map(d => ({
-                        id: d.id,
-                        name: d.data().name || d.id,
-                        permissions: d.data().permissions || {},
-                        is_system: !!d.data().is_system
-                    }));
-                    setRolesList(list);
-                });
-                const originalUnsubRoles = unsubRoles;
-                unsubRoles = () => { originalUnsubRoles(); cleanupRoles(); };
 
                 // Subscribe to user document for live status and role
                 const cleanupUser = trackListener(`AuthProvider-user-${firebaseUser.uid}`);
@@ -88,33 +66,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                         if (docSnap.exists()) {
                             let userData = docSnap.data();
                             
-                            // Instrument logging for diagnostic
                             if (userData.is_active === false || userData.portal_access === false || userData.is_locked === true || userData.is_deleted === true) {
                                 console.error("LOGOUT_CONDITION_MET", {
                                     exists: docSnap.exists(),
                                     fromCache: docSnap.metadata.fromCache,
-                                    hasPendingWrites: docSnap.metadata.hasPendingWrites,
                                     is_active: userData.is_active,
                                     portal_access: userData.portal_access,
                                     is_locked: userData.is_locked,
                                     is_deleted: userData.is_deleted,
-                                    snapshotTimestamp: new Date().toISOString()
                                 });
                                 
-                                // Verify with the server to prevent false logouts from cached ghost reads
+                                // Verify with server to prevent false logouts from cached reads
                                 try {
                                     const serverSnap = await getDocFromServer(doc(db, "users", firebaseUser.uid));
                                     if (serverSnap.exists()) {
                                         const serverData = serverSnap.data();
                                         if (serverData.is_active === false || serverData.portal_access === false || serverData.is_locked === true || serverData.is_deleted === true) {
-                                            console.trace("SIGNOUT_TRIGGERED_AUTH_PROVIDER");
                                             await fetch("/api/auth/logout", { method: "POST" });
                                             await auth.signOut();
                                             setRole(null);
                                             setUser(null);
                                             return;
                                         }
-                                        // False positive from cache, apply actual server state
                                         userData = serverData;
                                     } else {
                                         console.warn("User document not found on server.");
@@ -122,8 +95,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
                                     }
                                 } catch (err) {
                                     console.error("Error verifying logout condition with server:", err);
-                                    // Do not sign the user out if getDocFromServer fails, keep current session active
-                                    // Fall through to use the cached userData
                                 }
                             }
 
@@ -151,9 +122,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         return () => {
             unsubscribe();
-            if (unsubRoles) unsubRoles();
             if (unsubDoc) unsubDoc();
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     // Compute permissions matrix when role or rolesList changes
@@ -191,9 +162,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return match ? (match.permissions || {}) : {};
     }, [role, rolesList]);
 
-    // Update last login timestamp in the background
+    // Update last login timestamp — only runs once when user UID changes
     useEffect(() => {
-        if (user) {
+        if (user && lastUidRef.current !== user.uid) {
+            lastUidRef.current = user.uid;
             updateDoc(doc(db, "users", user.uid), {
                 last_login_at: new Date(),
                 updatedAt: new Date()
