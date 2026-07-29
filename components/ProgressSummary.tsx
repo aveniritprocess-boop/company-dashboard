@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { collection, query, orderBy, onSnapshot } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { subscribeToAllTasksForUser } from "@/lib/tasks";
+import { subscribeToUserTasks } from "@/lib/tasks";
 import { CheckCircle2, ListTodo, Activity, TrendingUp } from "lucide-react";
 import { ProgressChart } from "./charts/ProgressChart";
 
@@ -52,12 +52,9 @@ export function ProgressSummary() {
     });
 
     // 2. Subscribe to User Tasks in real-time
-    const unsubTasks = subscribeToAllTasksForUser(user.uid, (data) => {
-      // Filter tasks assigned to the user
-      const myTasks = data.filter(t => {
-        const arr = Array.isArray(t.assignedTo) ? t.assignedTo : t.assignedTo ? [t.assignedTo] : [];
-        return arr.includes(user.uid);
-      });
+    const unsubTasks = subscribeToUserTasks(user.uid, (data) => {
+      // Data is already filtered by assignedTo == user.uid
+      const myTasks = data;
       tasksDone = true;
       setStats(prev => ({
         ...prev,

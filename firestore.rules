@@ -73,7 +73,17 @@ service cloud.firestore {
 
     // Users collection
     match /users/{userId} {
-      allow read: if isUserActive();
+      allow read: if isSignedIn() && (
+        (request.auth.uid == userId && 
+         (resource == null || (
+           (resource.data.is_active == true || !resource.data.keys().hasAny(['is_active'])) &&
+           (resource.data.is_locked == false || !resource.data.keys().hasAny(['is_locked'])) &&
+           (resource.data.is_deleted == false || !resource.data.keys().hasAny(['is_deleted'])) &&
+           (resource.data.portal_access == true || !resource.data.keys().hasAny(['portal_access']))
+         ))
+        ) ||
+        (request.auth.uid != userId && isUserActive())
+      );
       
       // Allow new users to create their user record on first sign-in
       allow create: if isSignedIn() && request.auth.uid == userId && (

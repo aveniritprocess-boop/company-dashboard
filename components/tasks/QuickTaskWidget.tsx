@@ -31,7 +31,7 @@ export function QuickTaskWidget() {
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [commentTask, setCommentTask] = useState<Task | null>(null);
 
-  const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
+
   const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
 
   // Load all users for list & autocomplete

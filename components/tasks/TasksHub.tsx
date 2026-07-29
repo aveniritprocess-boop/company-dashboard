@@ -79,7 +79,7 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
   const [showCreateModal, setShowCreateModal] = useState(false);
 
 
-  const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
+
   const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
 
   // Load user dictionary on mount

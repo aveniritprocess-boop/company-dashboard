@@ -1,17 +1,19 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
-import { ProfileCard } from "@/components/ProfileCard";
-import { ProgressSummary } from "@/components/ProgressSummary";
-import { DashboardShortcuts } from "@/components/DashboardShortcuts";
-import { DashboardAttendanceWidget } from "@/components/DashboardAttendanceWidget";
-import { RecentActivity } from "@/components/RecentActivity";
-import { TaskAnalyticsWidget } from "@/components/tasks/TaskAnalyticsWidget";
-import { RecentTaskSummary } from "@/components/tasks/RecentTaskSummary";
-import { DashboardSearch } from "@/components/DashboardSearch";
-import { TodayTasksWidget } from "@/components/TodayTasksWidget";
-import { DayReportWidget } from "@/components/DayReportWidget";
-import { QuickTaskWidget } from "@/components/tasks/QuickTaskWidget";
+import dynamic from "next/dynamic";
+
+const ProfileCard = dynamic(() => import("@/components/ProfileCard").then(mod => ({ default: mod.ProfileCard })), { ssr: false });
+const ProgressSummary = dynamic(() => import("@/components/ProgressSummary").then(mod => ({ default: mod.ProgressSummary })), { ssr: false });
+const DashboardShortcuts = dynamic(() => import("@/components/DashboardShortcuts").then(mod => ({ default: mod.DashboardShortcuts })), { ssr: false });
+const DashboardAttendanceWidget = dynamic(() => import("@/components/DashboardAttendanceWidget").then(mod => ({ default: mod.DashboardAttendanceWidget })), { ssr: false });
+const RecentActivity = dynamic(() => import("@/components/RecentActivity").then(mod => ({ default: mod.RecentActivity })), { ssr: false });
+const TaskAnalyticsWidget = dynamic(() => import("@/components/tasks/TaskAnalyticsWidget").then(mod => ({ default: mod.TaskAnalyticsWidget })), { ssr: false });
+const RecentTaskSummary = dynamic(() => import("@/components/tasks/RecentTaskSummary").then(mod => ({ default: mod.RecentTaskSummary })), { ssr: false });
+const DashboardSearch = dynamic(() => import("@/components/DashboardSearch").then(mod => ({ default: mod.DashboardSearch })), { ssr: false });
+const TodayTasksWidget = dynamic(() => import("@/components/TodayTasksWidget").then(mod => ({ default: mod.TodayTasksWidget })), { ssr: false });
+const DayReportWidget = dynamic(() => import("@/components/DayReportWidget").then(mod => ({ default: mod.DayReportWidget })), { ssr: false });
+const QuickTaskWidget = dynamic(() => import("@/components/tasks/QuickTaskWidget").then(mod => ({ default: mod.QuickTaskWidget })), { ssr: false });
 import { Sparkles } from "lucide-react";
 
 export default function DashboardPage() {

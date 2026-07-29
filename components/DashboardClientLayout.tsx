@@ -64,7 +64,7 @@ export function DashboardClientLayout({
                 : "overflow-y-auto p-4 sm:p-8 scroll-smooth"
               }`}
           >
-            {!user.emailVerified ? <VerifyEmailNotice /> : children}
+            {children}
           </main>
         </div>
       </div>

@@ -44,19 +44,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             if (unsubDoc) { unsubDoc(); unsubDoc = null; }
 
             if (firebaseUser) {
-                // One-time fetch of roles (not a real-time listener — roles rarely change)
+                // One-time fetch of roles with sessionStorage caching
                 if (rolesList.length === 0) {
-                    getDocs(collection(db, "roles"))
-                        .then((snap) => {
-                            const list = snap.docs.map(d => ({
-                                id: d.id,
-                                name: d.data().name || d.id,
-                                permissions: d.data().permissions || {},
-                                is_system: !!d.data().is_system
-                            }));
-                            setRolesList(list);
-                        })
-                        .catch((err) => console.error("Failed to fetch roles:", err));
+                    try {
+                        const cachedRoles = sessionStorage.getItem("roles_cache");
+                        if (cachedRoles) {
+                            setRolesList(JSON.parse(cachedRoles));
+                        } else {
+                            getDocs(collection(db, "roles"))
+                                .then((snap) => {
+                                    const list = snap.docs.map(d => ({
+                                        id: d.id,
+                                        name: d.data().name || d.id,
+                                        permissions: d.data().permissions || {},
+                                        is_system: !!d.data().is_system
+                                    }));
+                                    setRolesList(list);
+                                    sessionStorage.setItem("roles_cache", JSON.stringify(list));
+                                })
+                                .catch((err) => console.error("Failed to fetch roles:", err));
+                        }
+                    } catch (e) {
+                        console.error("Error with sessionStorage roles cache:", e);
+                    }
                 }
 
                 // Subscribe to user document for live status and role
