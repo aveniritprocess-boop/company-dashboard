@@ -46,7 +46,7 @@ export function CommandMenu() {
         { name: "View Your Tasks", href: "/dashboard/your-tasks", icon: CheckSquare, category: "Work" },
         { name: "Daily Diary", href: "/dashboard/daily-diary", icon: Calendar, category: "Work" },
         { name: "Settings", href: "/dashboard/settings", icon: Settings, category: "System" },
-        ...(role === "admin" || role === "manager" || role === "ceo" ? [
+        ...(role === "admin" || role === "manager" || role === "ceo" || role === "md" ? [
             { name: "Task Assigned", href: "/dashboard/tasks-assigned", icon: Users, category: "Admin" }
         ] : []),
     ];

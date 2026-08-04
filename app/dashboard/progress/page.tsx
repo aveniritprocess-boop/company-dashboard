@@ -27,7 +27,7 @@ export default function ProgressPage() {
       if (!user) return;
       try {
         let result;
-        if (role === "admin" || role === "ceo") {
+        if (role === "admin" || role === "ceo" || role === "md") {
           result = await getAllCachedTasks();
         } else if (role === "manager") {
           result = await getTeamCachedTasks(user.uid);

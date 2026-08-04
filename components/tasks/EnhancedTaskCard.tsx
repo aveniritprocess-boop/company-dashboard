@@ -65,7 +65,7 @@ export function EnhancedTaskCard({ task, currentUserId, currentUserRole, current
     ? task.assignedTo.includes(currentUserId) 
     : task.assignedTo === currentUserId;
 
-  const isAdminOrCEO = currentUserRole === "admin" || currentUserRole === "ceo";
+  const isAdminOrCEO = currentUserRole === "admin" || currentUserRole === "ceo" || currentUserRole === "md";
   const canEdit = isAssignedToMe || isAdminOrCEO || currentUserRole === "manager";
   const canDelete = isAdminOrCEO && task.status === "completed";
 

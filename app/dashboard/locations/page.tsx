@@ -21,7 +21,7 @@ export default function LocationsPage() {
     const [error, setError] = useState("");
 
     useEffect(() => {
-        if (role !== "admin" && role !== "ceo") return;
+        if (role !== "admin" && role !== "ceo" && role !== "md") return;
 
         const unsubscribe = subscribeToLocations((data) => {
             setLocations(data);
@@ -96,7 +96,7 @@ export default function LocationsPage() {
         );
     }
 
-    if (role !== "admin" && role !== "ceo") {
+    if (role !== "admin" && role !== "ceo" && role !== "md") {
         return (
             <div className="flex h-[80vh] flex-col items-center justify-center text-center space-y-4">
                 <ShieldAlert className="h-16 w-16 text-slate-300 dark:text-slate-700" />
@@ -114,7 +114,7 @@ export default function LocationsPage() {
                     <p className="text-sm text-slate-500 mt-1">Manage all company branches and offices.</p>
                 </div>
 
-                {(role === "admin" || role === "ceo") && (
+                {(role === "admin" || role === "ceo" || role === "md") && (
                     <button
                         onClick={() => handleOpenModal()}
                         className="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition-all shadow-md shadow-indigo-500/20"
@@ -140,7 +140,7 @@ export default function LocationsPage() {
                                 <th className="px-6 py-4 font-semibold">Code</th>
                                 <th className="px-6 py-4 font-semibold">State</th>
                                 <th className="px-6 py-4 font-semibold">Status</th>
-                                {(role === "admin" || role === "ceo") && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
+                                {(role === "admin" || role === "ceo" || role === "md") && <th className="px-6 py-4 font-semibold text-right">Actions</th>}
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -167,17 +167,17 @@ export default function LocationsPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             <button
-                                                onClick={() => (role === "admin" || role === "ceo") && handleToggleStatus(loc)}
-                                                disabled={role !== "admin" && role !== "ceo"}
+                                                onClick={() => (role === "admin" || role === "ceo" || role === "md") && handleToggleStatus(loc)}
+                                                disabled={role !== "admin" && role !== "ceo" && role !== "md"}
                                                 className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium capitalize border transition-colors ${loc.status === 'active'
                                                         ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20'
                                                         : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
-                                                    } ${role === "admin" || role === "ceo" ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+                                                    } ${role === "admin" || role === "ceo" || role === "md" ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
                                             >
                                                 {loc.status}
                                             </button>
                                         </td>
-                                        {(role === "admin" || role === "ceo") && (
+                                        {(role === "admin" || role === "ceo" || role === "md") && (
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <button

@@ -1,4 +1,4 @@
-export type UserRole = "ceo" | "admin" | "manager" | "hr" | "team_lead" | "employee";
+export type UserRole = "ceo" | "md" | "admin" | "manager" | "hr" | "team_lead" | "employee";
 
 export interface AppUser {
   uid: string;
@@ -48,20 +48,23 @@ export interface Invite {
   createdAt: any; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
-export const PERMISSIONS = {
-  ceo: {
-    canManageUsers: true,
-    canManageTeams: true,
-    canManageProjects: true,
-    canViewAllTasks: true,
-    canEditSirTasks: true,
-    canAssignTasks: true,
-    canUpdateTaskStatus: true,
-    canViewAllEmployees: true,
-    canDeleteTasks: true,
-    canManageRoles: true,
-    canBeDeleted: false,
-  },
+const CEO_PERMISSIONS = {
+  canManageUsers: true,
+  canManageTeams: true,
+  canManageProjects: true,
+  canViewAllTasks: true,
+  canEditSirTasks: true,
+  canAssignTasks: true,
+  canUpdateTaskStatus: true,
+  canViewAllEmployees: true,
+  canDeleteTasks: true,
+  canManageRoles: true,
+  canBeDeleted: false,
+};
+
+export const PERMISSIONS: Record<string, Record<string, boolean>> = {
+  ceo: CEO_PERMISSIONS,
+  md: CEO_PERMISSIONS,
   admin: {
     canManageUsers: true,
     canManageTeams: true,

@@ -259,7 +259,7 @@ export default function EmployeesDashboard() {
 
     // 2. Real-time listener for Change Requests approvals queue
     useEffect(() => {
-        if (currentUserRole !== "ceo" && currentUserRole !== "admin") return;
+        if (currentUserRole !== "ceo" && currentUserRole !== "md" && currentUserRole !== "admin") return;
         const unsub = onSnapshot(collection(db, "change_approval_queue"), (snap) => {
             const list = snap.docs.map(d => ({
                 id: d.id,
@@ -272,7 +272,7 @@ export default function EmployeesDashboard() {
 
     // 3. Paginated cursor fetching for global audit logs (Tab 6)
     const fetchAuditLogs = async (firstPage = false) => {
-        if (currentUserRole !== "ceo" && currentUserRole !== "admin" && currentUserRole !== "hr") return;
+        if (currentUserRole !== "ceo" && currentUserRole !== "md" && currentUserRole !== "admin" && currentUserRole !== "hr") return;
         
         if (firstPage) {
             setLoadingAudit(true);
@@ -1196,7 +1196,7 @@ export default function EmployeesDashboard() {
         document.body.removeChild(link);
     };
 
-    const managers = users.filter(u => u.role === "manager" || u.role === "admin" || u.role === "ceo" || u.role === "super_admin");
+    const managers = users.filter(u => u.role === "manager" || u.role === "admin" || u.role === "ceo" || u.role === "md" || u.role === "super_admin");
 
 
     // Dashboard metrics (excludes soft-deleted/archived employees for Total, Active)
@@ -1273,7 +1273,7 @@ export default function EmployeesDashboard() {
 
     // Visual Org Chart direct reports lookup
     const [selectedManagerId, setSelectedManagerId] = useState<string>("");
-    const activeManagerObj = users.find(u => u.uid === selectedManagerId) || users.find(u => u.role === "ceo" || u.role === "super_admin") || users[0];
+    const activeManagerObj = users.find(u => u.uid === selectedManagerId) || users.find(u => u.role === "ceo" || u.role === "md" || u.role === "super_admin") || users[0];
     const directReports = activeManagerObj ? users.filter(u => u.reporting_manager_id === activeManagerObj.uid && !u.is_deleted) : [];
 
     // Filter audit logs
@@ -1394,7 +1394,7 @@ export default function EmployeesDashboard() {
                         Roles Matrix
                     </button>
                 )}
-                {(currentUserRole === "ceo" || currentUserRole === "admin" || currentUserRole === "super_admin" || currentUserRole === "hr") && (
+                {(currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin" || currentUserRole === "super_admin" || currentUserRole === "hr") && (
                     <button 
                         onClick={() => setActiveTab("audit")} 
                         className={`flex-1 py-3 px-4 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 ${activeTab === "audit" ? "bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white"}`}
@@ -2169,7 +2169,7 @@ export default function EmployeesDashboard() {
                             <p className="text-xs text-slate-500">Configure access permissions across standard and custom directory roles without code changes.</p>
                         </div>
                         <div className="flex gap-3 items-center flex-wrap">
-                            {(currentUserRole === "ceo" || currentUserRole === "admin") && (
+                            {(currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin") && (
                                 <button
                                     onClick={handleSeedMockEmployees}
                                     disabled={seedingEmployees}

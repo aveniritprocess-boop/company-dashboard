@@ -9,7 +9,7 @@ import { TaskDetailsModal } from "./TaskDetailsModal";
 
 export function AdminTaskSummaryWidget() {
     const { user, role } = useAuth();
-    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+    const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
     const [tasks, setTasks] = useState<Task[]>([]);
     const [employees, setEmployees] = useState<AppUserSummary[]>([]);
     const [loading, setLoading] = useState(true);

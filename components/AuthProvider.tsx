@@ -137,14 +137,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
+    const isUltimateAdmin = useMemo(() => {
+        const rLower = role?.toLowerCase();
+        return rLower === "ceo" || rLower === "md";
+    }, [role]);
+
     // Compute permissions matrix when role or rolesList changes
     const permissions = useMemo<Record<string, boolean>>(() => {
         if (!role || rolesList.length === 0) {
             return {};
         }
 
-        // CEO has ultimate access: all possible permissions are true
-        if (role.toLowerCase() === "ceo") {
+        // CEO & MD have ultimate access: all possible permissions are true
+        if (isUltimateAdmin) {
             const allPerms: Record<string, boolean> = {};
             rolesList.forEach(r => {
                 Object.keys(r.permissions).forEach(k => {
@@ -170,7 +175,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         const match = rolesList.find(r => r.id === role);
         return match ? (match.permissions || {}) : {};
-    }, [role, rolesList]);
+    }, [role, rolesList, isUltimateAdmin]);
 
     // Update last login timestamp — only runs once when user UID changes
     useEffect(() => {
@@ -184,7 +189,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     }, [user]);
 
     const hasPermission = (permissionName: string) => {
-        if (role?.toLowerCase() === "ceo") return true;
+        if (isUltimateAdmin) return true;
         return !!permissions[permissionName];
     };
 

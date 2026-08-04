@@ -25,20 +25,9 @@ export function DashboardClientLayout({
   const pathname = usePathname();
 
   useEffect(() => {
-    if (!loading && !user) {
-      fetch("/api/auth/logout", { method: "POST" }).catch(console.error);
-      console.error("LOGIN_REDIRECT_TRIGGERED_LAYOUT", {
-        loading,
-        userIsNull: user === null,
-        pathname,
-        timestamp: new Date().toISOString()
-      });
-      console.trace("SIGNOUT_TRACE_LAYOUT");
-      window.location.href = "/login";
-      return;
-    }
-
-    if (!loading && mustChangePassword && pathname !== "/dashboard/update-password") {
+    // Only handle password change redirects here.
+    // Server-side layout.tsx already enforces session cookie validity for /dashboard routes.
+    if (!loading && user && mustChangePassword && pathname !== "/dashboard/update-password") {
       router.push("/dashboard/update-password");
     }
   }, [user, loading, mustChangePassword, pathname, router]);

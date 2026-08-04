@@ -5,7 +5,7 @@ import { useAuth } from "@/components/AuthProvider";
 import { Task, createTask, addTaskHistory, TaskStatus } from "@/lib/tasks";
 import { getTeamsForUser } from "@/lib/teams";
 import { Team } from "@/lib/roles";
-import { AppUserSummary } from "@/lib/users";
+import { AppUserSummary, getAllUsers } from "@/lib/users";
 import { MentionTextarea, extractMentionedUsers } from "@/components/MentionTextarea";
 import { X, Loader2, Plus, Paperclip, Trash2 } from "lucide-react";
 import { CreateTaskSchema } from "@/lib/validators/task";
@@ -95,7 +95,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
     setError("");
 
     try {
-      const mentionedUserIds = extractMentionedUsers(description, users);
+      const mentionedUserIds = extractMentionedUsers(description, employeeList);
       const newTaskId = await createTask(
         title.trim(),
         description.trim(),
@@ -155,16 +155,28 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
     }
   };
 
+  const [employeeList, setEmployeeList] = useState<AppUserSummary[]>(users || []);
+
+  useEffect(() => {
+    if (users && users.length > 0) {
+      setEmployeeList(users);
+    } else {
+      getAllUsers().then(setEmployeeList).catch((e) => console.error("Failed to load users for task modal", e));
+    }
+  }, [users]);
+
   // Options for MultiSelect Assignees
   const assigneeOptions = [
     ...(user ? [{ label: "Self (Assign to Me)", value: user.uid }] : []),
-    ...users.filter(u => u.uid !== user?.uid).map(emp => ({
+    ...employeeList.filter(u => u.uid !== user?.uid).map(emp => ({
       label: emp.name ? `${emp.name} (${emp.email ?? ""})` : (emp.email ?? emp.uid),
       value: emp.uid
     }))
   ];
 
-  console.log("Assignee Options   :", assigneeOptions.length);
+  if (process.env.NODE_ENV === "development") {
+    console.log("Assignee Options   :", assigneeOptions.length);
+  }
 
   // We will trace MultiSelect inline below
 

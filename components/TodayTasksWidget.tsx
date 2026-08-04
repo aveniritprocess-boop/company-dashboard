@@ -21,7 +21,7 @@ export function TodayTasksWidget() {
     // Track if component is still mounted to avoid state updates after unmount
     const mountedRef = useRef(true);
 
-    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+    const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
     // Load user names once (one-time fetch, not a real-time listener)
     useEffect(() => {

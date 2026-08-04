@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevel, isCEOorMD } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { UpdateEmployeeSchema } from '@/lib/validators/employee';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
+        if (!isHRLevel(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can edit profiles' }, { status: 403 });
         }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Prevent modification of CEO profiles by normal admins
-        if (oldData.role?.toLowerCase() === 'ceo' && user.role.toLowerCase() !== 'ceo') {
+        if (oldData.role?.toLowerCase() === 'ceo' && !isCEOorMD(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only the CEO can edit CEO profiles' }, { status: 403 });
         }
 

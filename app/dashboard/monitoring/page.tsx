@@ -100,7 +100,7 @@ export default function MonitoringPage() {
   }, []);
 
   return (
-    <RoleGuard allowedRoles={["admin", "ceo"]} fallbackPath="/dashboard">
+    <RoleGuard allowedRoles={["admin", "ceo", "md"]} fallbackPath="/dashboard">
       <div className="space-y-8 max-w-7xl mx-auto">
         {/* Welcome Header Banner */}
         <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-slate-900 via-slate-950 to-indigo-950 px-6 py-6 shadow-xl border border-slate-800">

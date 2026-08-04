@@ -38,7 +38,9 @@ export function MultiSelect({
   onChange,
   placeholder = "Select items...",
 }: MultiSelectProps) {
-  console.log("Rendered Options   :", options.length);
+  if (process.env.NODE_ENV === "development") {
+    console.log("Rendered Options   :", options.length);
+  }
 
   const [open, setOpen] = React.useState(false)
 
@@ -94,7 +96,8 @@ export function MultiSelect({
                   return (
                     <CommandItem
                       key={option.value}
-                      value={option.label}
+                      value={option.value}
+                      keywords={[option.label]}
                       onSelect={() => {
                         if (isSelected) {
                           onChange(selected.filter((s) => s !== option.value))

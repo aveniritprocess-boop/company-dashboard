@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevel, isCEOorMD } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { ResetPasswordSchema } from '@/lib/validators/auth';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
+        if (!isHRLevel(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can reset passwords' }, { status: 403 });
         }
 
@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Prevent resetting CEO password by Admins
-        if (targetData.role?.toLowerCase() === 'ceo' && user.role.toLowerCase() !== 'ceo') {
+        if (targetData.role?.toLowerCase() === 'ceo' && !isCEOorMD(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only the CEO can reset CEO passwords' }, { status: 403 });
         }
 

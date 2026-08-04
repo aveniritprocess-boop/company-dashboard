@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isAdminLevel } from '@/lib/auth-middleware';
 
 interface Cache {
   counts: {
@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: user.error }, { status: user.status });
     }
 
-    if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin') {
+    if (!isAdminLevel(user.role)) {
       return NextResponse.json({ error: 'Forbidden: Only CEO or Admin can access monitoring stats' }, { status: 403 });
     }
 

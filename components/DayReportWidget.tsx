@@ -16,7 +16,7 @@ import {
 
 export function DayReportWidget() {
     const { user, role } = useAuth();
-    const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+    const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
     const [entries, setEntries] = useState<DailyDiaryEntry[]>([]);
     const [users, setUsers] = useState<Record<string, string>>({});
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);

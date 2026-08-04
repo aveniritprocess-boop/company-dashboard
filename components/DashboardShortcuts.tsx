@@ -20,7 +20,7 @@ export function DashboardShortcuts() {
       icon: ClipboardList,
       theme: "blue" as const,
     },
-    ...(role === "admin" || role === "ceo" || role === "manager"
+    ...(role === "admin" || role === "ceo" || role === "md" || role === "manager"
       ? [{
         name: "Task Assigned",
         href: "/dashboard/tasks-assigned",

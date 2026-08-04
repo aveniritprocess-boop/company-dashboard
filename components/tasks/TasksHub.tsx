@@ -80,7 +80,7 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
 
 
 
-  const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+  const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
   // Load user dictionary on mount
   useEffect(() => {

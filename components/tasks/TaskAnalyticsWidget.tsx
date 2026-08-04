@@ -32,7 +32,7 @@ export function TaskAnalyticsWidget() {
       }
     }
     // Only admins/CEO load all users; managers/employees only need their own tasks
-    if (role === "admin" || role === "ceo" || role === "super_admin") {
+    if (role === "admin" || role === "ceo" || role === "md" || role === "super_admin") {
       loadUsers();
     }
   }, [role]);

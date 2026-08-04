@@ -70,7 +70,7 @@ function TaskGivenContent() {
 
         setLoadingTasks(true);
         let unsub: () => void;
-        if (role === "admin" || role === "ceo") {
+        if (role === "admin" || role === "ceo" || role === "md") {
             unsub = subscribeToAllTasks((data, last) => {
                 setAssignedTasks(data);
                 setLastDoc(last);
@@ -93,7 +93,7 @@ function TaskGivenContent() {
         setLoadingMore(true);
 
         let unsub: () => void;
-        if (role === "admin" || role === "ceo") {
+        if (role === "admin" || role === "ceo" || role === "md") {
             unsub = subscribeToAllTasks((data, last) => {
                 setAssignedTasks(prev => {
                     const newTasks = data.filter(d => !prev.find(p => p.id === d.id));
@@ -370,7 +370,7 @@ function TaskGivenContent() {
 
 export default function TaskGivenBySirPage() {
     return (
-        <RoleGuard allowedRoles={["admin", "manager", "ceo"]} fallbackPath="/dashboard">
+        <RoleGuard allowedRoles={["admin", "manager", "ceo", "md"]} fallbackPath="/dashboard">
             <TaskGivenContent />
         </RoleGuard>
     );

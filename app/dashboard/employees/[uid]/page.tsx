@@ -110,7 +110,7 @@ export default function EmployeeProfilePage() {
         if (!uid) return;
 
         // Security check
-        const allowed = currentUserRole === "ceo" || currentUserRole === "admin" || currentUserRole === "hr" || user?.uid === uid;
+        const allowed = currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin" || currentUserRole === "hr" || user?.uid === uid;
         if (!allowed && currentUserRole !== null) {
             router.push("/dashboard");
             return;
@@ -392,7 +392,7 @@ export default function EmployeeProfilePage() {
     const completionRate = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
     // Check if evaluator has write privileges
-    const hasWriteRights = currentUserRole === "ceo" || currentUserRole === "admin" || currentUserRole === "hr";
+    const hasWriteRights = currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin" || currentUserRole === "hr";
 
     return (
         <div className="space-y-6 max-w-7xl mx-auto pb-16">
@@ -513,7 +513,7 @@ export default function EmployeeProfilePage() {
                         <button onClick={() => setActiveTab("attendance")} className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${activeTab === "attendance" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/40"}`}>
                             Attendance
                         </button>
-                        {(currentUserRole === "ceo" || currentUserRole === "admin" || currentUserRole === "hr") && (
+                        {(currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin" || currentUserRole === "hr") && (
                             <button onClick={() => setActiveTab("audit")} className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl transition-all ${activeTab === "audit" ? "bg-indigo-600 text-white shadow-sm" : "text-slate-500 hover:text-slate-900 dark:hover:text-white hover:bg-slate-50 dark:hover:bg-slate-800/40"}`}>
                                 Audits
                             </button>
@@ -957,7 +957,7 @@ export default function EmployeeProfilePage() {
                         )}
 
                         {/* AUDITS TAB */}
-                        {activeTab === "audit" && (currentUserRole === "ceo" || currentUserRole === "admin" || currentUserRole === "hr") && (
+                        {activeTab === "audit" && (currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin" || currentUserRole === "hr") && (
                             <div className="space-y-6">
                                 <h3 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-wider flex items-center gap-2">
                                     <Activity className="h-4 w-4 text-indigo-500" />

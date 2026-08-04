@@ -96,9 +96,25 @@ export async function verifyFirebaseToken(request: NextRequest): Promise<Decoded
     }
 }
 
+export function isCEOorMD(userRole: string): boolean {
+    const r = userRole?.toLowerCase();
+    return r === 'ceo' || r === 'md';
+}
+
+export function isHRLevel(userRole: string): boolean {
+    const r = userRole?.toLowerCase();
+    return r === 'hr' || r === 'hr_admin' || r === 'hr_executive';
+}
+
+export function isAdminLevel(userRole: string): boolean {
+    const r = userRole?.toLowerCase();
+    return r === 'admin' || r === 'super_admin' || isCEOorMD(r);
+}
+
 export function authorizeRole(userRole: string, requiredRole: string): { error: string; status: number } | null {
-    if (userRole.toLowerCase() !== requiredRole.toLowerCase()) {
-        return { error: `Forbidden: Only ${requiredRole} can perform this action`, status: 403 };
-    }
-    return null;
+    const userRoleLower = userRole.toLowerCase();
+    const reqRoleLower = requiredRole.toLowerCase();
+    if (userRoleLower === reqRoleLower) return null;
+    if ((reqRoleLower === 'ceo' || reqRoleLower === 'md') && isCEOorMD(userRoleLower)) return null;
+    return { error: `Forbidden: Only ${requiredRole} can perform this action`, status: 403 };
 }

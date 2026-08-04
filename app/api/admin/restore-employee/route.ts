@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevel } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { UidBodySchema } from '@/lib/validators/auth';
@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (user.role.toLowerCase() !== 'ceo' && user.role.toLowerCase() !== 'admin' && user.role.toLowerCase() !== 'hr') {
+        if (!isHRLevel(user.role)) {
             return NextResponse.json({ success: false, error: 'Forbidden: Only CEO, Admin, or HR can restore archived employees' }, { status: 403 });
         }
 

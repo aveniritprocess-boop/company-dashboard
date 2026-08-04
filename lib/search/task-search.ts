@@ -37,7 +37,7 @@ export function buildTaskQuery(params: TaskSearchParams, userId: string, userRol
     // Requires client-side filter for `status != completed`, but we can do date here
     const today = new Date().toISOString().split('T')[0];
     q = query(q, where("dueDate", "<", today));
-  } else if (userRole !== "admin" && userRole !== "ceo" && userRole !== "manager") {
+  } else if (userRole !== "admin" && userRole !== "ceo" && userRole !== "md" && userRole !== "manager") {
     // Regular employees MUST only see their own tasks
     // We cannot use multiple array-contains or equality on different fields in one query
     // This is handled by applying a strict client-side filter after fetching, 

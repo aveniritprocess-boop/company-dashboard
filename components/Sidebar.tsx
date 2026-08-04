@@ -62,17 +62,17 @@ export function Sidebar() {
     { name: "Task Summary", href: "/dashboard/task-summary", icon: BarChart2 },
     { name: "Shared Sheet", href: "/dashboard/sheet", icon: TableProperties },
     { name: "Assign Tasks", href: "/dashboard/tasks-assigned", icon: UserCheck },
-    ...(role === "admin" || role === "ceo"
+    ...(role === "admin" || role === "ceo" || role === "md"
       ? [{ name: "Employees", href: "/dashboard/employees", icon: Users }]
       : []),
     { name: "Attendance", href: "/dashboard/attendance", icon: CalendarClock },
-    ...(role === "admin" || role === "manager" || role === "ceo"
+    ...(role === "admin" || role === "manager" || role === "ceo" || role === "md"
       ? [
         { name: "Teams", href: "/dashboard/teams", icon: Users },
         { name: "Projects", href: "/dashboard/projects", icon: FolderGit2 }
       ]
       : []),
-    ...(role === "admin" || role === "ceo"
+    ...(role === "admin" || role === "ceo" || role === "md"
       ? [
         { name: "Locations", href: "/dashboard/locations", icon: MapPin },
         { name: "Monitoring", href: "/dashboard/monitoring", icon: Activity }
@@ -176,7 +176,7 @@ export function Sidebar() {
             label: "Main Menu",
             items: navigation.filter(i => ["Dashboard", "Daily Summary", "Your Tasks", "Task Summary", "Assign Tasks", "Shared Sheet", "Attendance", "Progress"].includes(i.name))
           },
-          ...(role === "admin" || role === "manager" || role === "ceo" ? [
+          ...(role === "admin" || role === "manager" || role === "ceo" || role === "md" ? [
             {
               label: "Management",
               items: navigation.filter(i => ["Employees", "Teams", "Projects", "Locations"].includes(i.name))

@@ -75,14 +75,20 @@ export async function getAllUsers(limitCount?: number): Promise<AppUserSummary[]
         const q = query(collection(db, "employee_directory"));
         const snap = await getDocs(q);
         
-        console.log("Firestore Returned :", snap.size);
+        if (process.env.NODE_ENV === "development") {
+            console.log("Firestore Returned :", snap.size);
+        }
 
         let users = snap.docs.map((d) => mapDocToUser(d.id, d.data()));
-        console.log("Mapped Users       :", users.length);
+        if (process.env.NODE_ENV === "development") {
+            console.log("Mapped Users       :", users.length);
+        }
         
-        // Filter out deleted or inactive users
-        users = users.filter(u => u.is_deleted !== true && u.is_active !== false);
-        console.log("Filtered Users     :", users.length);
+        // Filter out deleted, inactive, portal-revoked, or locked users
+        users = users.filter(u => u.is_deleted !== true && u.is_active !== false && u.portal_access !== false && u.is_locked !== true);
+        if (process.env.NODE_ENV === "development") {
+            console.log("Filtered Users     :", users.length);
+        }
         
         // Sort in memory by name
         users.sort((a, b) => {
@@ -109,14 +115,20 @@ export function subscribeToAllUsers(
   const q = query(collectionRef);
   
   const unsub = onSnapshot(q, (snap) => {
-    console.log("Firestore Returned :", snap.size);
+    if (process.env.NODE_ENV === "development") {
+        console.log("Firestore Returned :", snap.size);
+    }
 
     let users = snap.docs.map((d) => mapDocToUser(d.id, d.data()));
-    console.log("Mapped Users       :", users.length);
+    if (process.env.NODE_ENV === "development") {
+        console.log("Mapped Users       :", users.length);
+    }
     
-    // Filter out deleted or inactive users
-    users = users.filter(u => u.is_deleted !== true && u.is_active !== false);
-    console.log("Filtered Users     :", users.length);
+    // Filter out deleted, inactive, portal-revoked, or locked users
+    users = users.filter(u => u.is_deleted !== true && u.is_active !== false && u.portal_access !== false && u.is_locked !== true);
+    if (process.env.NODE_ENV === "development") {
+        console.log("Filtered Users     :", users.length);
+    }
     
     // Sort in memory
     users.sort((a, b) => {

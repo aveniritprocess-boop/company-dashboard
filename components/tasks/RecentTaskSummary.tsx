@@ -132,8 +132,8 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
   const [detailTask, setDetailTask] = useState<Task | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
 
-  const isAdminOrManager = role === "admin" || role === "ceo" || role === "manager";
-  const isAdmin = role === "admin" || role === "ceo" || role === "super_admin";
+  const isAdminOrManager = role === "admin" || role === "ceo" || role === "md" || role === "manager";
+  const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
   // Load users once
   useEffect(() => {
