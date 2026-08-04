@@ -75,14 +75,14 @@ service cloud.firestore {
     // Users collection
     match /users/{userId} {
       allow get: if isSignedIn() && (
-        (request.auth.uid == userId && 
-         (resource == null || (
-           resource.data.get('is_active', true) == true &&
-           resource.data.get('is_locked', false) == false &&
-           resource.data.get('is_deleted', false) == false &&
-           resource.data.get('portal_access', true) == true
-         )
-        ) ||
+        (request.auth.uid == userId && (
+          resource == null || (
+            resource.data.get('is_active', true) == true &&
+            resource.data.get('is_locked', false) == false &&
+            resource.data.get('is_deleted', false) == false &&
+            resource.data.get('portal_access', true) == true
+          )
+        )) ||
         (request.auth.uid != userId && isManagerOrAbove())
       );
       
