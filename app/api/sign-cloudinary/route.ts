@@ -1,5 +1,6 @@
 import { v2 as cloudinary } from "cloudinary";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+import { verifyFirebaseToken } from "@/lib/auth-middleware";
 
 cloudinary.config({
   cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
@@ -7,10 +8,19 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
+    const user = await verifyFirebaseToken(request);
+    if ('error' in user) {
+      return NextResponse.json({ error: user.error }, { status: user.status });
+    }
+
     const body = await request.json();
     const { paramsToSign } = body;
+
+    if (!paramsToSign) {
+      return NextResponse.json({ error: "Missing paramsToSign" }, { status: 400 });
+    }
 
     const signature = cloudinary.utils.api_sign_request(
       paramsToSign,

@@ -47,8 +47,14 @@ export function TaskBoard() {
       setNewTaskDesc("");
       setNewTaskPriority("medium");
     } catch (err: unknown) {
-      console.error("Failed to create task", err);
-      setError("Failed to create task. Please try again.");
+      const errorObj = err as { code?: string; message?: string; stack?: string };
+      console.error("Failed to create task", {
+        code: errorObj?.code,
+        message: errorObj?.message,
+        stack: errorObj?.stack,
+        error: err
+      });
+      setError(errorObj?.message || (errorObj?.code ? `Firebase error: ${errorObj.code}` : "Failed to create task. Please try again."));
     }
   };
 

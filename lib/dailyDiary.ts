@@ -16,7 +16,7 @@ import {
   DocumentData
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
-import { broadcastNotification } from "./notifications";
+import { notifyManagersAndAdmins } from "./notifications";
 
 export type DiaryStatus = "Completed" | "Pending";
 
@@ -48,10 +48,10 @@ export async function addDiaryEntry(
     updatedAt: serverTimestamp(),
   });
 
-  await broadcastNotification(
+  await notifyManagersAndAdmins(
     "Daily Diary Updated",
     `${userName || "An employee"} updated their daily work report for ${date}.`,
-    { type: "record", fromUserId: userId, fromUserName: userName }
+    { type: "record", fromUserId: userId, fromUserName: userName, link: "/dashboard/daily-diary" }
   );
 }
 
@@ -64,10 +64,10 @@ export async function updateDiaryEntry(
   const ref = doc(db, COLLECTION, id);
   await updateDoc(ref, { ...data, updatedAt: serverTimestamp() });
 
-  await broadcastNotification(
+  await notifyManagersAndAdmins(
     "Daily Diary Updated",
     `${userName || "An employee"} modified a work report for ${data.date || "recent date"}.`,
-    { type: "record", fromUserId: userId, fromUserName: userName }
+    { type: "record", fromUserId: userId, fromUserName: userName, link: "/dashboard/daily-diary" }
   );
 }
 

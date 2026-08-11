@@ -36,6 +36,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [employeeList, setEmployeeList] = useState<AppUserSummary[]>(users || []);
 
   // Load user teams
   useEffect(() => {
@@ -45,6 +46,14 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
         .catch((e) => console.error("Failed to load user teams for tasks", e));
     }
   }, [user]);
+
+  useEffect(() => {
+    if (users && users.length > 0) {
+      setEmployeeList(users);
+    } else {
+      getAllUsers().then(setEmployeeList).catch((e) => console.error("Failed to load users for task modal", e));
+    }
+  }, [users]);
 
   if (!isOpen) return null;
 
@@ -110,12 +119,22 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
         teamId
       );
 
-      await addTaskHistory(
-        newTaskId,
-        `Task created via quick command with status: ${status.toUpperCase()} and priority: ${priority.toUpperCase()}`,
-        user.uid,
-        user.displayName || "User"
-      );
+      try {
+        await addTaskHistory(
+          newTaskId,
+          `Task created via quick command with status: ${status.toUpperCase()} and priority: ${priority.toUpperCase()}`,
+          user.uid,
+          user.displayName || "User"
+        );
+      } catch (historyErr: unknown) {
+        const hErr = historyErr as { code?: string; message?: string; stack?: string };
+        console.error("Task History Logging Error (Non-blocking):", {
+          code: hErr?.code,
+          message: hErr?.message,
+          stack: hErr?.stack,
+          error: historyErr,
+        });
+      }
 
       // Reset Form
       setTitle("");
@@ -148,34 +167,45 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
       }
       onClose();
     } catch (err: unknown) {
-      console.error(err);
-      setError("Failed to create task. Please verify permissions.");
+      const errorObj = err as { code?: string; message?: string; stack?: string };
+      console.error("Task Creation Error", {
+        code: errorObj?.code,
+        message: errorObj?.message,
+        stack: errorObj?.stack,
+        error: err
+      });
+      const errorMsg = errorObj?.message || (errorObj?.code ? `Firebase error: ${errorObj.code}` : "Failed to create task. Please verify permissions.");
+      setError(errorMsg);
     } finally {
       setSubmitting(false);
     }
   };
 
-  const [employeeList, setEmployeeList] = useState<AppUserSummary[]>(users || []);
-
-  useEffect(() => {
-    if (users && users.length > 0) {
-      setEmployeeList(users);
-    } else {
-      getAllUsers().then(setEmployeeList).catch((e) => console.error("Failed to load users for task modal", e));
-    }
-  }, [users]);
-
   // Options for MultiSelect Assignees
+  const activeEmployees = employeeList.filter(
+    (u) =>
+      u.is_active !== false &&
+      u.is_locked !== true &&
+      u.is_deleted !== true &&
+      u.portal_access !== false
+  );
+
   const assigneeOptions = [
     ...(user ? [{ label: "Self (Assign to Me)", value: user.uid }] : []),
-    ...employeeList.filter(u => u.uid !== user?.uid).map(emp => ({
-      label: emp.name ? `${emp.name} (${emp.email ?? ""})` : (emp.email ?? emp.uid),
-      value: emp.uid
-    }))
+    ...activeEmployees
+      .filter((u) => u.uid !== user?.uid)
+      .map((emp) => ({
+        label: emp.name ? `${emp.name} (${emp.email ?? ""})` : (emp.email ?? emp.uid),
+        value: emp.uid,
+      })),
   ];
 
   if (process.env.NODE_ENV === "development") {
+    console.log("Firestore Returned :", employeeList.length);
+    console.log("Mapped Users       :", employeeList.length);
+    console.log("Filtered Users     :", activeEmployees.length);
     console.log("Assignee Options   :", assigneeOptions.length);
+    console.log("Rendered Options   :", assigneeOptions.length);
   }
 
   // We will trace MultiSelect inline below

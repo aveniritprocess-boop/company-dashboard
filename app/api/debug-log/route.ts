@@ -3,6 +3,10 @@ import fs from 'fs';
 import path from 'path';
 
 export async function POST(request: Request) {
+    if (process.env.NODE_ENV === 'production') {
+        return NextResponse.json({ error: 'Endpoint disabled in production environment' }, { status: 403 });
+    }
+
     try {
         const body = await request.json();
         const logPath = path.join(process.cwd(), 'scratch', 'error.log');

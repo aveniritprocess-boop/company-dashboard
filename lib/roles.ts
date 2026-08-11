@@ -94,7 +94,7 @@ export const PERMISSIONS: Record<string, Record<string, boolean>> = {
     canManageProjects: false,
     canViewAllTasks: false,
     canEditSirTasks: false,
-    canAssignTasks: false,
+    canAssignTasks: true,
     canUpdateTaskStatus: true,
     canViewAllEmployees: true,
     canDeleteTasks: false,
@@ -116,6 +116,8 @@ export const PERMISSIONS: Record<string, Record<string, boolean>> = {
     canManageTeams: false,
     canManageProjects: false,
     canViewAllTasks: false,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
     canViewOwnTasksOnly: true,
   },
 };

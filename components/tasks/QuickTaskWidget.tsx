@@ -44,22 +44,30 @@ export function QuickTaskWidget() {
     if (!user) return;
     Promise.resolve().then(() => setLoading(true));
 
+    // Safety fallback timer to prevent UI stuck in loading state if network snapshot is delayed
+    const timer = setTimeout(() => setLoading(false), 2500);
+
     let unsub: () => void;
     if (isAdmin) {
       // Admins/CEO see all tasks globally
       unsub = subscribeToAllTasksNoLimit((data) => {
         setTasks(data);
         setLoading(false);
+        clearTimeout(timer);
       });
     } else {
       // Managers and employees see only their own tasks
       unsub = subscribeToAllTasksForUser(user.uid, (data) => {
         setTasks(data);
         setLoading(false);
+        clearTimeout(timer);
       });
     }
 
-    return () => unsub?.();
+    return () => {
+      clearTimeout(timer);
+      unsub?.();
+    };
   }, [user, role, isAdmin]);
 
   // Resolving names dictionary

@@ -396,4 +396,75 @@ describe("Firestore Security Rules Tests", () => {
       }));
     });
   });
+
+  describe("Universal Task Role Permission Matrix Tests", () => {
+    const roles = ["ceo", "md", "admin", "manager", "team_lead", "hr", "employee"] as const;
+
+    roles.forEach((role) => {
+      it(`evaluates universal task creation and permissions for active role: ${role}`, async () => {
+        const adminDb = getAdminDb();
+        const userId = `user_${role}`;
+        await seedUser(adminDb, userId, { role, is_active: true, portal_access: true });
+        await seedTask(adminDb, `task_${role}`, {
+          taskText: `Test task for ${role}`,
+          assignedBy: userId,
+          assignedTo: userId,
+        });
+
+        const db = getAuthedDb(userId);
+        const taskRef = doc(db, "tasks", `task_${role}`);
+        const historyRef = doc(db, "tasks", `task_${role}`, "history", "hist1");
+
+        // 1. Read Task
+        await assertAllowed(getDoc(taskRef));
+
+        // 2. Add History
+        await assertAllowed(setDoc(historyRef, {
+          taskId: `task_${role}`,
+          message: "Created history",
+          performedBy: userId,
+          performedByName: role,
+          createdAt: serverTimestamp(),
+        }));
+
+        // 3. Create Task (Universal for all active roles)
+        const newTaskRef = doc(collection(db, "tasks"));
+        await assertAllowed(setDoc(newTaskRef, {
+          taskText: "Universal task creation test",
+          assignedBy: userId,
+          assignedTo: userId,
+          status: "pending",
+          priority: "medium",
+          createdAt: serverTimestamp(),
+        }));
+
+        // 4. Update Task (Creator or admin/manager allowed)
+        await assertAllowed(updateDoc(taskRef, { status: "in_progress" }));
+
+        // 5. Delete Task (Admins/Managers or Creator allowed)
+        const canDelete = ["ceo", "md", "admin", "manager"].includes(role);
+        const deletePromise = deleteDoc(taskRef);
+        if (canDelete) {
+          await assertAllowed(deletePromise);
+        }
+      });
+    });
+
+    it("prevents privilege escalation when universal task creation is enabled", async () => {
+      const adminDb = getAdminDb();
+      await seedUser(adminDb, "emp_attacker", { role: "employee" });
+      await seedUser(adminDb, "target_user", { role: "employee" });
+      
+      const db = getAuthedDb("emp_attacker");
+
+      // Attacker trying to elevate role on target user -> Denied
+      await assertDenied(updateDoc(doc(db, "users", "target_user"), { role: "admin" }));
+
+      // Attacker trying to delete target user document -> Denied
+      await assertDenied(deleteDoc(doc(db, "users", "target_user")));
+
+      // Attacker trying to delete audit logs -> Denied
+      await assertDenied(deleteDoc(doc(db, "audit_logs", "log1")));
+    });
+  });
 });

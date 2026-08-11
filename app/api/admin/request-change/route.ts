@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevel, isAdminLevel } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { RequestChangeSchema } from '@/lib/validators/auth';
@@ -23,6 +23,15 @@ export async function POST(request: NextRequest) {
         const validation = parseOrError(RequestChangeSchema, body);
         if ('response' in validation) return validation.response;
         const { uid, changes, previous_values, reason } = validation.data;
+
+        // Authorization check: non-HR/Admin users can ONLY request profile changes for their own UID
+        const isElevated = isHRLevel(user.role) || isAdminLevel(user.role);
+        if (!isElevated && uid !== user.uid) {
+            return NextResponse.json({
+                success: false,
+                error: 'Forbidden: You can only submit profile change requests for your own account.'
+            }, { status: 403 });
+        }
 
         // Fetch target user name
         const targetDoc = await adminDb.collection('users').doc(uid).get();

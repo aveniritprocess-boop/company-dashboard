@@ -138,9 +138,15 @@ function TaskGivenContent() {
             showToast("Task assigned successfully.", "success");
             setForm(emptyForm());
             setShowModal(false);
-        } catch (error) {
-            console.error(error);
-            showToast("Failed to assign task.", "error");
+        } catch (error: unknown) {
+            const errorObj = error as { code?: string; message?: string; stack?: string };
+            console.error("Task Assignment Error:", {
+                code: errorObj?.code,
+                message: errorObj?.message,
+                stack: errorObj?.stack,
+                error: error
+            });
+            showToast(`Failed to assign task: ${errorObj?.message || String(error)}`, "error");
         } finally {
             setSubmitting(false);
         }

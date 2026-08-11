@@ -44,3 +44,5 @@ next-env.d.ts
 
 functions/node_modules
 
+.agents/
+scratch/

@@ -183,18 +183,21 @@ service cloud.firestore {
     match /tasks/{taskId} {
       allow read: if canReadTask();
       
-      allow create: if isAdmin() || isManager();
+      allow create: if isUserActive();
       
       allow update: if isUserActive() && (
         isAdmin() ||
-        (isManager() && resource.data.assignedBy == request.auth.uid) ||
+        isRole('manager') ||
+        resource.data.assignedBy == request.auth.uid ||
+        resource.data.assigned_by == request.auth.uid ||
+        resource.data.createdBy == request.auth.uid ||
         (isAssignedToUser(resource.data, request.auth.uid) && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at']) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at', 'progress', 'completedAt']) &&
          request.resource.data.assignedTo == resource.data.assignedTo &&
          request.resource.data.assignedBy == resource.data.assignedBy)
       );
       
-      allow delete: if isAdmin() || (isCEO() && resource.data.assignedBy == request.auth.uid);
+      allow delete: if isAdmin() || resource.data.assignedBy == request.auth.uid;
 
       // Comments subcollection under tasks/{taskId}
       match /comments/{commentId} {
@@ -203,6 +206,13 @@ service cloud.firestore {
         allow update, delete: if isUserActive() && (
           isAdmin() || resource.data.commentedBy == request.auth.uid
         );
+      }
+
+      // History subcollection under tasks/{taskId}
+      match /history/{historyId} {
+        allow read: if canAccessParentTask(taskId);
+        allow create: if isUserActive() && canAccessParentTask(taskId);
+        allow update, delete: if isUserActive() && isAdmin();
       }
     }
     
@@ -226,7 +236,11 @@ service cloud.firestore {
     // Notifications Collection
     match /notifications/{notificationId} {
       allow read: if isUserActive() && resource.data.userId == request.auth.uid;
-      allow create: if isUserActive();
+      allow create: if isUserActive() && (
+        isAdmin() || isManager() ||
+        request.resource.data.fromUserId == request.auth.uid ||
+        request.resource.data.userId == request.auth.uid
+      );
       allow update, delete: if isUserActive() && resource.data.userId == request.auth.uid;
     }
     
@@ -280,7 +294,8 @@ service cloud.firestore {
       allow update: if isUserActive() && (
         isAdmin() || isHR() || (
           resource.data.user_id == request.auth.uid &&
-          request.resource.data.user_id == resource.data.user_id
+          request.resource.data.user_id == resource.data.user_id &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reason', 'dates', 'leave_type', 'updated_at', 'updatedAt'])
         )
       );
       allow delete: if isUserActive() && (isAdmin() || isHR());
@@ -379,7 +394,7 @@ service cloud.firestore {
 
     // Default deny for everything else
     match /{document=**} {
-      allow read, write: if isCEO();
+      allow read, write: if false;
     }
   }
 }

@@ -127,6 +127,54 @@ export async function broadcastNotification(
   await batch.commit();
 }
 
+/**
+ * Sends a notification only to Managers, HR, Admins, CEO, and MD.
+ * Used for operational updates like daily diary reports to avoid mass broadcast write amplification.
+ */
+export async function notifyManagersAndAdmins(
+  title: string,
+  message: string,
+  options?: {
+    link?: string;
+    fromUserId?: string;
+    fromUserName?: string;
+    fromUserPhoto?: string;
+    type?: AppNotification["type"];
+  }
+): Promise<void> {
+  const { getAllUsers } = await import("./users");
+  const users = await getAllUsers();
+  
+  const targetUsers = users.filter((u) => {
+    const r = u.role?.toLowerCase();
+    return r === "admin" || r === "ceo" || r === "md" || r === "manager" || r === "hr";
+  });
+
+  if (targetUsers.length === 0) return;
+
+  const batch = writeBatch(db);
+  const now = serverTimestamp();
+
+  targetUsers.forEach((user) => {
+    if (options?.fromUserId && user.uid === options.fromUserId) return; // skip self notification
+    const ref = doc(collection(db, NOTIFICATIONS_COLLECTION));
+    batch.set(ref, {
+      userId: user.uid,
+      title,
+      message,
+      read: false,
+      link: options?.link || null,
+      fromUserId: options?.fromUserId || null,
+      fromUserName: options?.fromUserName || null,
+      fromUserPhoto: options?.fromUserPhoto || null,
+      type: options?.type || "record",
+      createdAt: now,
+    });
+  });
+
+  await batch.commit();
+}
+
 export async function markNotificationAsRead(notificationId: string): Promise<void> {
   const ref = doc(db, NOTIFICATIONS_COLLECTION, notificationId);
   await updateDoc(ref, { read: true });

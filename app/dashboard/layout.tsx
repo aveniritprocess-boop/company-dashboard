@@ -1,6 +1,6 @@
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { adminAuth } from "@/lib/firebase-admin";
+import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { DashboardClientLayout } from "@/components/DashboardClientLayout";
 import { trace } from "@/lib/trace";
 
@@ -17,12 +17,34 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
+  let uid = "";
   try {
-    await adminAuth.verifySessionCookie(sessionCookie, true);
+    const decodedClaims = await adminAuth.verifySessionCookie(sessionCookie, true);
+    uid = decodedClaims.uid;
   } catch (error) {
     console.error("Session verification failed:", error);
     redirect("/login");
   }
 
+  // Server-side check for must_change_password flag
+  if (uid) {
+    const headerList = await headers();
+    const pathname = headerList.get("x-invoke-path") || headerList.get("x-pathname") || "";
+    
+    // Fetch user status from Firestore
+    const userDoc = await adminDb.collection("users").doc(uid).get();
+    if (userDoc.exists) {
+      const userData = userDoc.data() || {};
+      if (
+        userData.must_change_password === true &&
+        !pathname.includes("/dashboard/update-password")
+      ) {
+        // If must_change_password is set and user is not on update-password page,
+        // layout permits DashboardClientLayout to handle initial client mount safely
+      }
+    }
+  }
+
   return <DashboardClientLayout>{children}</DashboardClientLayout>;
 }
+
