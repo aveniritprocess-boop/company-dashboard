@@ -16,6 +16,44 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 
+/**
+ * Maps Firebase Auth error codes to messages a real user can act on.
+ *
+ * Firebase deliberately collapses "no such user" and "wrong password" into the
+ * single auth/invalid-credential code so that the login form cannot be used to
+ * enumerate which emails have accounts. We preserve that: the message below is
+ * intentionally generic about WHY it failed, and only adds the one piece of
+ * information the user actually needs — that an account provisioned through
+ * Google sign-in has no password and must use the SSO button instead. That hint
+ * is shown to everyone regardless of whether the account exists, so it leaks
+ * nothing, while resolving by far the most common cause of a failed sign-in here.
+ */
+function friendlyAuthError(code: string | undefined, fallback: string): string {
+  switch (code) {
+    case "auth/invalid-credential":
+    case "auth/wrong-password":
+    case "auth/user-not-found":
+      return 'Incorrect email or password. If your account was set up with Google, sign in using the "Google Identity SSO" button below instead of a password.';
+    case "auth/invalid-email":
+      return "Please enter a valid email address.";
+    case "auth/user-disabled":
+      return "This account has been disabled. Please contact your administrator.";
+    case "auth/too-many-requests":
+      return "Too many failed sign-in attempts. Please wait a few minutes, or reset your password.";
+    case "auth/network-request-failed":
+      return "Network error. Please check your connection and try again.";
+    case "auth/operation-not-allowed":
+      return "This sign-in method is not enabled. Please contact your administrator.";
+    case "auth/unauthorized-domain":
+      return "This domain is not authorized for sign-in. Please contact your administrator.";
+    case "auth/popup-closed-by-user":
+    case "auth/cancelled-popup-request":
+      return "Google sign-in was cancelled. Please try again.";
+    default:
+      return fallback;
+  }
+}
+
 export default function LoginPage() {
   const [error, setError] = useState("");
   const [email, setEmail] = useState("");
@@ -245,7 +283,7 @@ export default function LoginPage() {
         setMfaResolver(resolver);
         initMfa(resolver);
       } else {
-        setError(errorObj.message);
+        setError(friendlyAuthError(errorObj.code, errorObj.message));
       }
     } finally {
       setLoading(false);
@@ -274,11 +312,12 @@ export default function LoginPage() {
         try {
           await signInWithRedirect(auth, provider);
         } catch (redirectErr: unknown) {
-          setError((redirectErr as Error).message);
+          const redirectObj = redirectErr as Error & { code?: string };
+          setError(friendlyAuthError(redirectObj.code, redirectObj.message));
           setLoading(false);
         }
       } else {
-        setError(errorObj.message);
+        setError(friendlyAuthError(errorObj.code, errorObj.message));
         setLoading(false);
       }
     }
