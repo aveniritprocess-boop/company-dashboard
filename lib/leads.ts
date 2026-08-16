@@ -15,9 +15,9 @@ import {
   QueryDocumentSnapshot,
   DocumentData
 } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { createNotification, sendEmail } from "./notifications";
-import { getUserById } from "./users";
+import { getDirectoryUserById } from "./users";
 import { APP_URL } from "./config";
 
 export type LeadStatus = "New" | "Contacted" | "Qualified" | "Proposal" | "Negotiation" | "Won" | "Lost" | "Pending" | "In Progress" | "Resolved";
@@ -63,22 +63,29 @@ export async function addLead(
     const title = type === "sales" ? "New Sales Lead Assigned" : "New Service Lead Assigned";
     const msg = `You have been assigned a new ${type} lead: "${data.title}" for client ${data.clientName}`;
 
-    await createNotification(data.assignedTo, title, msg, {
-      link: leadPath,
-      type: "record",
-      fromUserId: data.createdBy,
-      fromUserName: data.createdByName
-    });
+    // Best-effort: the lead is already persisted, so a notification failure must
+    // not surface as a failed lead creation. Assignee lookup goes through
+    // employee_directory because Firestore rules forbid non-managers from
+    // reading another person's users/{uid} doc.
+    try {
+      await createNotification(data.assignedTo, title, msg, {
+        link: leadPath,
+        type: "record",
+        fromUserId: data.createdBy,
+        fromUserName: data.createdByName
+      });
 
-    // Email Notification
-    const assignee = await getUserById(data.assignedTo);
-    if (assignee?.email) {
-      await sendEmail(
-        assignee.email,
-        title,
-        `Hello ${assignee.name},\n\n${msg}\n\nClient: ${data.clientName}\nNotes: ${data.notes}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
-        `<p>Hello ${assignee.name},</p><p>${msg}</p><p><strong>Client:</strong> ${data.clientName}<br><strong>Notes:</strong> ${data.notes}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
-      );
+      const assignee = await getDirectoryUserById(data.assignedTo);
+      if (assignee?.email) {
+        await sendEmail(
+          assignee.email,
+          title,
+          `Hello ${assignee.name},\n\n${msg}\n\nClient: ${data.clientName}\nNotes: ${data.notes}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
+          `<p>Hello ${assignee.name},</p><p>${msg}</p><p><strong>Client:</strong> ${data.clientName}<br><strong>Notes:</strong> ${data.notes}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
+        );
+      }
+    } catch (notifyErr) {
+      console.error("Lead created, but notifying the assignee failed:", notifyErr);
     }
   }
 }
@@ -105,19 +112,28 @@ export async function updateLead(
     const title = type === "sales" ? "Sales Lead Assignment Updated" : "Service Lead Assignment Updated";
     const msg = `You have been assigned or re-assigned a ${type} lead: "${data.title}"`;
 
-    await createNotification(data.assignedTo, title, msg, {
-      link: leadPath,
-      type: "record",
-    });
+    // Best-effort, same rationale as createLead above. fromUserId is required:
+    // the notifications create rule only allows a non-admin/non-manager caller
+    // to write a notification addressed to someone else when fromUserId is their
+    // own uid — omitting it made re-assignment fail for ordinary employees.
+    try {
+      await createNotification(data.assignedTo, title, msg, {
+        link: leadPath,
+        type: "record",
+        fromUserId: auth.currentUser?.uid,
+      });
 
-    const assignee = await getUserById(data.assignedTo);
-    if (assignee?.email) {
-      await sendEmail(
-        assignee.email,
-        title,
-        `Hello ${assignee.name},\n\n${msg}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
-        `<p>Hello ${assignee.name},</p><p>${msg}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
-      );
+      const assignee = await getDirectoryUserById(data.assignedTo);
+      if (assignee?.email) {
+        await sendEmail(
+          assignee.email,
+          title,
+          `Hello ${assignee.name},\n\n${msg}\n\nView it on the dashboard: ${APP_URL}${leadPath}`,
+          `<p>Hello ${assignee.name},</p><p>${msg}</p><p>View it on the <a href="${APP_URL}${leadPath}">Dashboard</a></p>`
+        );
+      }
+    } catch (notifyErr) {
+      console.error("Lead updated, but notifying the assignee failed:", notifyErr);
     }
   }
 }

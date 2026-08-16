@@ -19,7 +19,7 @@ import {
 import { db, auth } from "@/lib/firebase";
 import { createNotification, sendEmail } from "./notifications";
 import { trackListener } from "./firestore-monitor";
-import { getUserById } from "./users";
+import { getUserById, getDirectoryUserById } from "./users";
 import { APP_URL } from "./config";
 import { logActivityClient } from "./audit-client";
 import { CreateTaskSchema } from "./validators/task";
@@ -88,12 +88,21 @@ export async function createTask(
   // Validate payload before writing to Firestore
   CreateTaskSchema.parse({ taskText, description, assignedBy, assignedTo, priority, startDate, dueDate, mentionedUsers, status, attachments, teamId });
   const now = serverTimestamp();
+
+  // Normalize assignedTo to an array. Callers are inconsistent — CreateTaskModal
+  // passes string[], the "Assign Tasks" page passes a bare string — which meant
+  // the same logical field had two shapes in Firestore, and any reader that only
+  // handled one shape silently missed half the tasks. Readers already normalize
+  // via Array.isArray(...), and the rules' isAssignedToUser() accepts both, so
+  // writing a consistent array shape is safe for existing and new data alike.
+  const assignedToList = Array.isArray(assignedTo) ? assignedTo : assignedTo ? [assignedTo] : [];
+
   const docRef = await addDoc(collection(db, TASKS_COLLECTION), {
     taskText,
     description,
-    assignedTo,
+    assignedTo: assignedToList,
     assignedBy,
-    assigned_to: assignedTo,
+    assigned_to: assignedToList,
     assigned_by: assignedBy,
     createdBy: assignedBy, // Ensure both exist for compatibility
     priority,
@@ -118,26 +127,19 @@ export async function createTask(
     fromUserId: assignedBy,
   };
 
-  if (Array.isArray(assignedTo)) {
-    for (const uid of assignedTo) {
-      await createNotification(uid, "New Task Assigned", `You have been assigned a new task: "${taskText}"`, notificationOptions);
-      
-      // Email Notification
-      const assignee = await getUserById(uid);
-      if (assignee?.email) {
-        await sendEmail(
-          assignee.email,
-          "New Task Assigned",
-          `Hello ${assignee.name},\n\nYou have been assigned a new task: "${taskText}"\n\nPriority: ${priority}\nDue Date: ${dueDate || "Not set"}\n\nView it here: ${APP_URL}/dashboard/your-tasks`,
-          `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="${APP_URL}/dashboard/your-tasks">Dashboard</a></p>`
-        );
-      }
-    }
-  } else if (assignedTo) {
-    await createNotification(assignedTo, "New Task Assigned", `You have been assigned a new task: "${taskText}"`, notificationOptions);
-    
-    // Email Notification
-    const assignee = await getUserById(assignedTo);
+  // Notify assignees + mentioned users. These are best-effort side effects: the
+  // task itself is already persisted above, so a failure here must never surface
+  // as "task creation failed" (it previously did, leaving an orphaned task doc
+  // while the UI showed an error and never refreshed).
+  //
+  // Assignee lookups go through employee_directory, not users — Firestore rules
+  // forbid a non-manager from reading another person's users/{uid} doc, so the
+  // old getUserById() call threw PERMISSION_DENIED whenever an ordinary employee
+  // assigned a task to anyone but themselves.
+  const notifyAssignee = async (uid: string) => {
+    await createNotification(uid, "New Task Assigned", `You have been assigned a new task: "${taskText}"`, notificationOptions);
+
+    const assignee = await getDirectoryUserById(uid);
     if (assignee?.email) {
       await sendEmail(
         assignee.email,
@@ -146,14 +148,23 @@ export async function createTask(
         `<p>Hello ${assignee.name},</p><p>You have been assigned a new task: <strong>"${taskText}"</strong></p><p><strong>Priority:</strong> ${priority}<br><strong>Due Date:</strong> ${dueDate || "Not set"}</p><p>View it here: <a href="${APP_URL}/dashboard/your-tasks">Dashboard</a></p>`
       );
     }
-  }
+  };
 
-  if (mentionedUsers && mentionedUsers.length > 0) {
-    for (const uid of mentionedUsers) {
-      if (uid !== assignedBy && (!Array.isArray(assignedTo) ? uid !== assignedTo : !assignedTo.includes(uid))) {
-        await createNotification(uid, "You were mentioned", `You were mentioned in a new task: "${taskText}"`, notificationOptions);
+  try {
+    const assigneeIds = assignedToList;
+    for (const uid of assigneeIds) {
+      await notifyAssignee(uid);
+    }
+
+    if (mentionedUsers && mentionedUsers.length > 0) {
+      for (const uid of mentionedUsers) {
+        if (uid !== assignedBy && !assigneeIds.includes(uid)) {
+          await createNotification(uid, "You were mentioned", `You were mentioned in a new task: "${taskText}"`, notificationOptions);
+        }
       }
     }
+  } catch (notifyErr) {
+    console.error("Task created, but notifying assignees failed:", notifyErr);
   }
 
   // Write audit log
@@ -417,6 +428,26 @@ export async function addTaskComment(
   }
 }
 
+/**
+ * Shared error handler for every Firestore listener in this module.
+ *
+ * Without an explicit error callback, onSnapshot failures — a missing composite
+ * index, a rules rejection, a dropped connection — pass completely silently: the
+ * success callback simply never fires, leaving the UI in a state that is
+ * indistinguishable from a genuine "no results". That is exactly how a broken
+ * Recent Task Summary looked like an empty one.
+ *
+ * We deliberately do NOT invoke the data callback with an empty array here:
+ * reporting "no tasks" for a query that actually failed would re-hide the very
+ * error we are trying to surface. Genuine empty results still flow through the
+ * normal success path untouched.
+ */
+function listenerError(context: string) {
+  return (error: unknown) => {
+    console.error(`[tasks] Firestore listener failed (${context}):`, error);
+  };
+}
+
 export function subscribeToTaskComments(taskId: string, callback: (comments: TaskComment[]) => void) {
   const commentsRef = collection(db, TASKS_COLLECTION, taskId, "comments");
   const q = query(commentsRef, orderBy("createdAt", "asc"));
@@ -429,7 +460,7 @@ export function subscribeToTaskComments(taskId: string, callback: (comments: Tas
     })) as TaskComment[];
 
     callback(comments);
-  });
+  }, listenerError(`subscribeToTaskComments taskId=${taskId}`));
   
   return () => {
     unsub();
@@ -494,12 +525,12 @@ export function subscribeToUserTasks(
     latestScalar = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
     lastScalarDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     emit();
-  });
+  }, listenerError(`subscribeToUserTasks assignedTo== userId=${userId}`));
 
   const unsubArray = onSnapshot(qArray, (snapshot) => {
     latestArray = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToUserTasks assignedTo array-contains userId=${userId}`));
 
   return () => {
     unsubScalar();
@@ -535,7 +566,7 @@ export function subscribeToTasksAssignedBy(
 
     const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     callback(tasks, lastDoc);
-  });
+  }, listenerError(`subscribeToTasksAssignedBy adminId=${adminId}`));
   return () => {
     unsub();
     cleanupMonitor();
@@ -567,7 +598,7 @@ export function subscribeToAllTasks(
 
     const lastDoc = snapshot.docs.length > 0 ? snapshot.docs[snapshot.docs.length - 1] : null;
     callback(tasks, lastDoc);
-  });
+  }, listenerError("subscribeToAllTasks"));
   return () => {
     unsub();
     cleanupMonitor();
@@ -596,7 +627,7 @@ export function subscribeToRecentTasks(
       ...doc.data()
     })) as Task[];
     callback(tasks);
-  });
+  }, listenerError(`subscribeToRecentTasks days=${days}`));
   
   return () => {
     unsub();
@@ -613,10 +644,23 @@ export function subscribeToRecentTasksForUser(
   const cutoffDate = new Date();
   cutoffDate.setDate(cutoffDate.getDate() - days);
 
-  // Query tasks assigned to user
+  // Query tasks assigned to user (array shape — multi-assignee tasks)
   const qAssignedTo = query(
     collection(db, TASKS_COLLECTION),
     where("assignedTo", "array-contains", userId),
+    where("createdAt", ">=", cutoffDate),
+    orderBy("createdAt", "desc"),
+    limit(100)
+  );
+
+  // Query tasks assigned to user (legacy scalar shape). subscribeToUserTasks and
+  // subscribeToAllTasksForUser both query BOTH shapes; this function previously
+  // queried only array-contains, so single-assignee tasks — e.g. everything
+  // created via the "Assign Tasks" page, which passes assignedTo as a string —
+  // never appeared in the assignee's Recent Task Summary.
+  const qAssignedToScalar = query(
+    collection(db, TASKS_COLLECTION),
+    where("assignedTo", "==", userId),
     where("createdAt", ">=", cutoffDate),
     orderBy("createdAt", "desc"),
     limit(100)
@@ -633,11 +677,12 @@ export function subscribeToRecentTasksForUser(
 
   const merged = new Map<string, Task>();
   let latestTo: Task[] = [];
+  let latestToScalar: Task[] = [];
   let latestBy: Task[] = [];
 
   const emit = () => {
     merged.clear();
-    [...latestTo, ...latestBy].forEach(t => merged.set(t.id, t));
+    [...latestTo, ...latestToScalar, ...latestBy].forEach(t => merged.set(t.id, t));
     const result = Array.from(merged.values()).sort((a, b) => {
       const tA = (a.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
       const tB = (b.createdAt as { toMillis?: () => number })?.toMillis?.() ?? 0;
@@ -651,16 +696,22 @@ export function subscribeToRecentTasksForUser(
   const unsubTo = onSnapshot(qAssignedTo, (snap) => {
     latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToRecentTasksForUser assignedTo array-contains userId=${userId}`));
+
+  const unsubToScalar = onSnapshot(qAssignedToScalar, (snap) => {
+    latestToScalar = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
+    emit();
+  }, listenerError(`subscribeToRecentTasksForUser assignedTo== userId=${userId}`));
 
   const unsubBy = onSnapshot(qAssignedBy, (snap) => {
     latestBy = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToRecentTasksForUser assignedBy== userId=${userId}`));
 
-  return () => { 
-    unsubTo(); 
-    unsubBy(); 
+  return () => {
+    unsubTo();
+    unsubToScalar();
+    unsubBy();
     cleanupMonitor();
   };
 }
@@ -713,17 +764,17 @@ export function subscribeToAllTasksForUser(
   const unsubTo = onSnapshot(qTo, (snap) => {
     latestTo = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToAllTasksForUser assignedTo== userId=${userId}`));
 
   const unsubToArray = onSnapshot(qToArray, (snap) => {
     latestToArray = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToAllTasksForUser assignedTo array-contains userId=${userId}`));
 
   const unsubBy = onSnapshot(qBy, (snap) => {
     latestBy = snap.docs.map(d => ({ id: d.id, ...d.data() })) as Task[];
     emit();
-  });
+  }, listenerError(`subscribeToAllTasksForUser assignedBy== userId=${userId}`));
 
   return () => {
     unsubTo();
@@ -761,7 +812,7 @@ export function subscribeToTaskHistory(taskId: string, callback: (history: TaskH
       ...doc.data()
     })) as TaskHistoryItem[];
     callback(history);
-  });
+  }, listenerError(`subscribeToTaskHistory taskId=${taskId}`));
   
   return () => {
     unsub();
@@ -785,7 +836,7 @@ export function subscribeToAllTasksNoLimit(callback: (tasks: Task[]) => void, li
       ...doc.data()
     })) as Task[];
     callback(tasks);
-  });
+  }, listenerError("subscribeToAllTasksNoLimit"));
   
   return () => {
     unsub();

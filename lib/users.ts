@@ -188,6 +188,21 @@ export function subscribeToArchivedUsers(
   };
 }
 
+/**
+ * Looks a user up via `employee_directory` instead of `users`.
+ *
+ * Firestore rules only let a caller read `users/{uid}` for their OWN uid unless
+ * they are manager-or-above, whereas `employee_directory` is readable by any
+ * active user (it exists to be the shared, non-sensitive projection). Any code
+ * path that needs another person's name/email — e.g. notifying a task assignee —
+ * must use this, or it will throw PERMISSION_DENIED for ordinary employees.
+ */
+export async function getDirectoryUserById(uid: string): Promise<AppUserSummary | null> {
+    const dirDoc = await getDoc(doc(db, "employee_directory", uid));
+    if (!dirDoc.exists()) return null;
+    return mapDocToUser(dirDoc.id, dirDoc.data());
+}
+
 export async function getUserById(uid: string): Promise<AppUserSummary | null> {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (!userDoc.exists()) return null;
