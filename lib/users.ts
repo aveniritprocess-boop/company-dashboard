@@ -150,6 +150,44 @@ export function subscribeToAllUsers(
   };
 }
 
+// Archived-only feed for the Employees > Archived tab. subscribeToAllUsers()
+// pre-filters out is_active===false / is_deleted===true / etc. docs before the
+// caller ever sees them (that filter is correct for every other consumer —
+// task assignee lists, @mentions, dashboards — which must never surface
+// offboarded staff). Archived employees therefore never reach the UI through
+// that feed. This subscribes to the same collection unfiltered client-side and
+// returns only the archived subset, so the Archived tab and Restore flow have
+// something to display and act on.
+export function subscribeToArchivedUsers(
+  callback: (users: AppUserSummary[]) => void
+): () => void {
+  const cleanupMonitor = trackListener("subscribeToArchivedUsers");
+  const collectionRef = collection(db, "employee_directory");
+
+  const q = query(collectionRef);
+
+  const unsub = onSnapshot(q, (snap) => {
+    let users = snap.docs.map((d) => mapDocToUser(d.id, d.data()));
+
+    users = users.filter(u => u.is_deleted === true || u.is_active === false || u.status === "archived");
+
+    users.sort((a, b) => {
+        const nameA = (a.name || "").toLowerCase();
+        const nameB = (b.name || "").toLowerCase();
+        return nameA.localeCompare(nameB);
+    });
+
+    callback(users);
+  }, (error) => {
+    console.error("Archived users subscription error:", error);
+  });
+
+  return () => {
+    unsub();
+    cleanupMonitor();
+  };
+}
+
 export async function getUserById(uid: string): Promise<AppUserSummary | null> {
     const userDoc = await getDoc(doc(db, "users", uid));
     if (!userDoc.exists()) return null;

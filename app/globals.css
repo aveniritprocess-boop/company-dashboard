@@ -4,11 +4,6 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@font-face {
-  font-family: 'Inter';
-  src: url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-}
-
 :root { /* slate-50 */ /* slate-900 */
 
   /* Premium Sky & Indigo Palette */
@@ -34,7 +29,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-border: var(--border);
 
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-geist-sans);
   --radius-xl: 0.75rem;
   --radius-2xl: 1rem;
   --font-heading: var(--font-sans);

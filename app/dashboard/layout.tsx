@@ -26,11 +26,12 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Server-side check for must_change_password flag
+  // Server-side check for must_change_password flag (defense-in-depth backing
+  // the client-side redirect in DashboardClientLayout.tsx)
   if (uid) {
     const headerList = await headers();
     const pathname = headerList.get("x-invoke-path") || headerList.get("x-pathname") || "";
-    
+
     // Fetch user status from Firestore
     const userDoc = await adminDb.collection("users").doc(uid).get();
     if (userDoc.exists) {
@@ -39,8 +40,7 @@ export default async function DashboardLayout({
         userData.must_change_password === true &&
         !pathname.includes("/dashboard/update-password")
       ) {
-        // If must_change_password is set and user is not on update-password page,
-        // layout permits DashboardClientLayout to handle initial client mount safely
+        redirect("/dashboard/update-password");
       }
     }
   }

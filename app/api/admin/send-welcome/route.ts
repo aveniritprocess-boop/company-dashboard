@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken, isHRLevel } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevelOrAbove } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { UidBodySchema } from '@/lib/validators/auth';
@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: false, error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (!isHRLevel(user.role)) {
+        if (!isHRLevelOrAbove(user.role)) {
             return NextResponse.json({ success: false, error: 'Forbidden: Only CEO, Admin, or HR can send welcome emails' }, { status: 403 });
         }
 

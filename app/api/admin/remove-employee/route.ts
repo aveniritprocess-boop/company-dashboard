@@ -95,7 +95,8 @@ export async function POST(request: NextRequest) {
         batch.update(adminDb.collection('employee_directory').doc(uid), {
             is_active: false,
             portal_access: false,
-            status: "archived"
+            status: "archived",
+            is_deleted: true
         });
         await batch.commit();
 

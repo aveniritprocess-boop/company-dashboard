@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { subscribeToAllDiaryEntriesByDate, subscribeToDiaryEntries, DailyDiaryEntry } from "@/lib/dailyDiary";
-import { getAllUsers } from "@/lib/users";
+import { subscribeToAllUsers } from "@/lib/users";
 import { 
   ClipboardList, 
   User, 
@@ -22,18 +22,19 @@ export function DayReportWidget() {
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [loading, setLoading] = useState(true);
 
-    // One-time user name fetch (no real-time listener needed for a lookup map)
+    // Load user names once auth is ready; realtime so it recovers automatically
+    // if the initial subscribe races Firebase Auth's post-login state restore.
     useEffect(() => {
-        getAllUsers()
-            .then((fetchedUsers) => {
-                const userMap: Record<string, string> = {};
-                fetchedUsers.forEach(u => {
-                    userMap[u.uid] = u.name || "Unknown User";
-                });
-                setUsers(userMap);
-            })
-            .catch(console.error);
-    }, []);
+        if (!user) return;
+        const unsub = subscribeToAllUsers((fetchedUsers) => {
+            const userMap: Record<string, string> = {};
+            fetchedUsers.forEach(u => {
+                userMap[u.uid] = u.name || "Unknown User";
+            });
+            setUsers(userMap);
+        });
+        return () => unsub();
+    }, [user]);
 
     useEffect(() => {
         if (!user) return;

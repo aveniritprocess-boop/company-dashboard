@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "../../../components/AuthProvider";
 import { db, auth } from "@/lib/firebase";
-import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers, subscribeToArchivedUsers, AppUserSummary } from "@/lib/users";
 import { broadcastNotification } from "@/lib/notifications";
 import { collection, onSnapshot, query, orderBy, limit, doc, setDoc, deleteDoc, updateDoc, getDocs, startAfter, getCountFromServer, DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import Link from "next/link";
@@ -146,6 +146,7 @@ export default function EmployeesDashboard() {
     
     // Core data states
     const [users, setUsers] = useState<AppUserSummary[]>([]);
+    const [archivedUsersLive, setArchivedUsersLive] = useState<AppUserSummary[]>([]);
     const [loading, setLoading] = useState(true);
     const [changeRequests, setChangeRequests] = useState<ChangeRequest[]>([]);
     const [globalAuditLogs, setGlobalAuditLogs] = useState<AuditLogEntry[]>([]);
@@ -256,6 +257,15 @@ export default function EmployeesDashboard() {
         }, usersLimit);
         return () => unsub();
     }, [usersLimit]);
+
+    // 1b. Archived employees live separately: subscribeToAllUsers() intentionally
+    // filters out archived/inactive records for every other consumer of `users`
+    // (dropdowns, dashboards, @mentions), so the Archived tab needs its own
+    // unfiltered feed or it can never show anyone to restore.
+    useEffect(() => {
+        const unsub = subscribeToArchivedUsers(setArchivedUsersLive);
+        return () => unsub();
+    }, []);
 
     // 2. Real-time listener for Change Requests approvals queue
     useEffect(() => {
@@ -967,6 +977,13 @@ export default function EmployeesDashboard() {
     };
 
     const handleSeedMockEmployees = async () => {
+        // Client-side guard for immediate feedback only — the server rejects
+        // isMockSeed:true in production regardless (see create-employee route),
+        // so this is not the actual security boundary, just a faster no-op.
+        if (process.env.NODE_ENV === "production") {
+            showToast("Mock employee seeding is disabled in production.", "error");
+            return;
+        }
         if (!confirm("Are you sure you want to seed 30 mock employees into the directory? This will execute client-side API requests to populate the directory.")) return;
         setSeedingEmployees(true);
         try {
@@ -1012,6 +1029,7 @@ export default function EmployeesDashboard() {
                 const tempPass = "AvenirMock123!";
 
                 const payload = {
+                    isMockSeed: true,
                     email,
                     password: tempPass,
                     name,
@@ -1201,7 +1219,9 @@ export default function EmployeesDashboard() {
 
     // Dashboard metrics (excludes soft-deleted/archived employees for Total, Active)
     const activeNonDeletedUsers = users.filter(u => !u.is_deleted && u.status !== "archived");
-    const archivedUsers = users.filter(u => u.is_deleted || u.status === "archived");
+    // `users` (via subscribeToAllUsers) never contains archived records — see
+    // the archivedUsersLive subscription above for why.
+    const archivedUsers = archivedUsersLive;
     
     const totalEmployees = activeNonDeletedUsers.length;
     const activeEmployees = activeNonDeletedUsers.filter(u => u.is_active && !u.is_locked).length;
@@ -2172,7 +2192,8 @@ export default function EmployeesDashboard() {
                             {(currentUserRole === "ceo" || currentUserRole === "md" || currentUserRole === "admin") && (
                                 <button
                                     onClick={handleSeedMockEmployees}
-                                    disabled={seedingEmployees}
+                                    disabled={seedingEmployees || process.env.NODE_ENV === "production"}
+                                    title={process.env.NODE_ENV === "production" ? "Disabled in production" : undefined}
                                     className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-purple-600/10 flex items-center gap-1.5 disabled:opacity-50"
                                 >
                                     {seedingEmployees ? (
@@ -2183,7 +2204,7 @@ export default function EmployeesDashboard() {
                                     ) : (
                                         <>
                                             <GitFork className="h-3.5 w-3.5" />
-                                            Seed 30 Employees
+                                            {process.env.NODE_ENV === "production" ? "Seeding Disabled (Prod)" : "Seed 30 Employees"}
                                         </>
                                     )}
                                 </button>

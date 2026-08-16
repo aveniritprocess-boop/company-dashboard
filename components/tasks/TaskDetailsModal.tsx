@@ -1,19 +1,21 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { 
-  Task, 
-  TaskComment, 
-  TaskHistoryItem, 
-  subscribeToTaskComments, 
+import {
+  Task,
+  TaskComment,
+  TaskHistoryItem,
+  subscribeToTaskComments,
   subscribeToTaskHistory,
   addTaskComment,
   updateTaskStatus,
   updateTaskProgress,
+  updateTaskAttachments,
   addTaskHistory,
   TaskStatus
 } from "@/lib/tasks";
 import { AppUserSummary } from "@/lib/users";
+import { uploadFile } from "@/lib/cloudinary";
 import { 
   X, 
   MessageSquare, 
@@ -38,13 +40,10 @@ interface TaskDetailsModalProps {
   users: AppUserSummary[];
 }
 
-interface MockAttachment {
-  id: string;
+interface TaskAttachment {
   name: string;
   size: string;
-  type: string;
-  uploadedBy: string;
-  uploadedAt: string;
+  url: string;
 }
 
 const PRIORITY_LABELS = {
@@ -69,12 +68,16 @@ export function TaskDetailsModal({ task, onClose, currentUserId, currentUserName
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState<"comments" | "history">("comments");
   
-  // Attachments State
-  const [attachments, setAttachments] = useState<MockAttachment[]>([
-    { id: "att-1", name: "SOAS_Testing_Guide_v1.pdf", size: "1.4 MB", type: "pdf", uploadedBy: "Rishi", uploadedAt: "Yesterday at 3:12 PM" },
-    { id: "att-2", name: "Box_Testing_Results.png", size: "450 KB", type: "image", uploadedBy: "Himanshu", uploadedAt: "Today at 9:45 AM" }
-  ]);
+  // Attachments State — sourced from the real task document (persisted via
+  // updateTaskAttachments), not local-only mock data.
+  const [attachments, setAttachments] = useState<TaskAttachment[]>(task.attachments || []);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentError, setAttachmentError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setAttachments(task.attachments || []);
+  }, [task.attachments]);
 
   useEffect(() => {
     const unsubComments = subscribeToTaskComments(task.id, (data) => {
@@ -167,32 +170,42 @@ export function TaskDetailsModal({ task, onClose, currentUserId, currentUserName
     await handleProgress(val);
   };
 
-  // Mock Upload
   const handleFileUploadClick = () => {
     fileInputRef.current?.click();
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = ""; // allow re-selecting the same file later
 
     const sizeMB = (file.size / (1024 * 1024)).toFixed(1);
     const sizeStr = parseFloat(sizeMB) > 0.1 ? `${sizeMB} MB` : `${(file.size / 1024).toFixed(0)} KB`;
-    
-    const newAttach: MockAttachment = {
-      id: `att-${Date.now()}`,
-      name: file.name,
-      size: sizeStr,
-      type: file.name.split(".").pop() || "file",
-      uploadedBy: currentUserName,
-      uploadedAt: "Just now"
-    };
 
-    setAttachments(prev => [...prev, newAttach]);
+    setUploadingAttachment(true);
+    setAttachmentError("");
+    try {
+      const url = await uploadFile(file);
+      const newAttach: TaskAttachment = { name: file.name, size: sizeStr, url };
+      const updated = [...attachments, newAttach];
+      setAttachments(updated);
+      await updateTaskAttachments(task.id, updated, currentUserId, currentUserName);
+    } catch (err: unknown) {
+      setAttachmentError((err as Error).message || "Failed to upload attachment.");
+    } finally {
+      setUploadingAttachment(false);
+    }
   };
 
-  const handleRemoveAttachment = (id: string) => {
-    setAttachments(prev => prev.filter(att => att.id !== id));
+  const handleRemoveAttachment = async (index: number) => {
+    const updated = attachments.filter((_, i) => i !== index);
+    setAttachments(updated);
+    try {
+      await updateTaskAttachments(task.id, updated, currentUserId, currentUserName);
+    } catch (err: unknown) {
+      setAttachmentError((err as Error).message || "Failed to remove attachment.");
+      setAttachments(attachments); // revert on failure
+    }
   };
 
   return (
@@ -244,26 +257,32 @@ export function TaskDetailsModal({ task, onClose, currentUserId, currentUserName
                   <Paperclip className="h-3.5 w-3.5" /> Attachments ({attachments.length})
                 </h4>
                 {canEdit && (
-                  <button 
+                  <button
                     onClick={handleFileUploadClick}
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300"
+                    disabled={uploadingAttachment}
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 disabled:opacity-50"
                   >
-                    <Plus className="h-3 w-3" /> Add Attachment
+                    {uploadingAttachment ? <Loader2 className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+                    {uploadingAttachment ? "Uploading..." : "Add Attachment"}
                   </button>
                 )}
-                <input 
-                  type="file" 
-                  ref={fileInputRef} 
-                  onChange={handleFileChange} 
-                  className="hidden" 
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
                 />
               </div>
 
+              {attachmentError && (
+                <p className="text-[11px] font-semibold text-rose-600 mb-2">{attachmentError}</p>
+              )}
+
               {attachments.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {attachments.map(att => (
-                    <div 
-                      key={att.id} 
+                  {attachments.map((att, idx) => (
+                    <div
+                      key={`${att.url}-${idx}`}
                       className="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-indigo-100 dark:hover:border-indigo-900/30 bg-slate-50/20 dark:bg-slate-900/30 group"
                     >
                       <div className="flex items-center gap-3 overflow-hidden">
@@ -275,21 +294,24 @@ export function TaskDetailsModal({ task, onClose, currentUserId, currentUserName
                             {att.name}
                           </p>
                           <p className="text-[10px] text-slate-400 font-semibold mt-0.5">
-                            {att.size} • by {att.uploadedBy}
+                            {att.size}
                           </p>
                         </div>
                       </div>
 
                       <div className="flex items-center gap-1">
-                        <button 
+                        <a
+                          href={att.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           title="Download"
                           className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
                         >
                           <Download className="h-3.5 w-3.5" />
-                        </button>
+                        </a>
                         {canEdit && (
-                          <button 
-                            onClick={() => handleRemoveAttachment(att.id)}
+                          <button
+                            onClick={() => handleRemoveAttachment(idx)}
                             title="Remove"
                             className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/20 rounded-lg transition-colors"
                           >

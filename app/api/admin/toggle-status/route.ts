@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken, isHRLevel, isCEOorMD } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevelOrAbove, isCEOorMD } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { ToggleStatusSchema } from '@/lib/validators/auth';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (!isHRLevel(user.role)) {
+        if (!isHRLevelOrAbove(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can manage user access' }, { status: 403 });
         }
 
@@ -77,6 +77,7 @@ export async function POST(request: NextRequest) {
         const dirPayload: Record<string, unknown> = {};
         if (is_active !== undefined) dirPayload.is_active = is_active;
         if (portal_access !== undefined) dirPayload.portal_access = portal_access;
+        if (is_locked !== undefined) dirPayload.is_locked = is_locked;
         // status is not strictly toggled here but is_active is what employee_directory cares about
         
         if (Object.keys(dirPayload).length > 0) {

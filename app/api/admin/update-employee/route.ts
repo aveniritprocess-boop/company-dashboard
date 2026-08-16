@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken, isHRLevel, isCEOorMD } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevelOrAbove, isCEOorMD } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { UpdateEmployeeSchema } from '@/lib/validators/employee';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (!isHRLevel(user.role)) {
+        if (!isHRLevelOrAbove(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can edit profiles' }, { status: 403 });
         }
 
@@ -70,6 +70,12 @@ export async function POST(request: NextRequest) {
             status,
             exit_details
         } = validation.data;
+
+        // Security role restriction: only CEO can grant/change to 'ceo' or 'admin' roles
+        // (mirrors the same restriction enforced in create-employee)
+        if (role !== undefined && (role === 'ceo' || role === 'admin') && role !== oldData.role && !isCEOorMD(user.role)) {
+            return NextResponse.json({ error: 'Forbidden: Only the CEO can grant Admin or CEO roles' }, { status: 403 });
+        }
 
         const updatePayload: Record<string, unknown> = {
             updated_at: new Date()
@@ -165,7 +171,10 @@ export async function POST(request: NextRequest) {
         
         // Prepare directory update payload (only if public fields changed)
         const dirPayload: Record<string, unknown> = {};
-        const publicFields = ['name', 'email', 'role', 'department', 'designation', 'profile_photo', 'status', 'is_active', 'portal_access'];
+        // is_deleted/is_locked/employee_type/joining_date/mobile/employee_id are
+        // synced too — lib/search/employee-search.ts filters on all of these, and
+        // an out-of-sync employee_directory doc makes search silently miss/misfilter results.
+        const publicFields = ['name', 'email', 'role', 'department', 'designation', 'profile_photo', 'status', 'is_active', 'portal_access', 'is_deleted', 'is_locked', 'employee_type', 'joining_date', 'mobile', 'employee_id'];
         for (const field of publicFields) {
             if (updatePayload[field] !== undefined) {
                 dirPayload[field] = updatePayload[field];

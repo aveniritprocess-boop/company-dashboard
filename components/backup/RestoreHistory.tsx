@@ -52,23 +52,24 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
 
   const handleRestore = async () => {
     if (!preview || !user) return;
-    if (!confirm("WARNING: This will overwrite existing data. Are you sure you want to execute the restore?")) return;
-    
+    if (!confirm("SIMULATED RESTORE ONLY: no real backup restoration is implemented. This will not read, write, or overwrite any real data — it only exercises the UI flow. Continue?")) return;
+
     setLoadingRestore(true);
     setRestoreStatus(null);
     try {
       await executeRestore(preview.backupId, preview.collections, user.uid, user.displayName || user.email || "Unknown");
-      setRestoreStatus({ msg: "Restore completed successfully.", type: "success" });
+      setRestoreStatus({ msg: "SIMULATED — no real restore occurred. This feature is not implemented for production use.", type: "success" });
       setTimeout(() => {
         setSelectedBackup(null);
         setPreview(null);
         setDryRunRes(null);
         setRestoreStatus(null);
-      }, 3000);
+      }, 5000);
     } catch (err) {
       console.error(err);
-      setRestoreStatus({ msg: "Restore failed.", type: "error" });
-      setTimeout(() => setRestoreStatus(null), 3000);
+      const msg = err instanceof Error ? err.message : "Restore failed.";
+      setRestoreStatus({ msg, type: "error" });
+      setTimeout(() => setRestoreStatus(null), 5000);
     } finally {
       setLoadingRestore(false);
     }
@@ -93,6 +94,15 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-lg font-bold text-slate-800 dark:text-white">Restore Simulator</h3>
             <button onClick={() => setSelectedBackup(null)} className="text-sm text-slate-500 hover:text-slate-700">Close</button>
+          </div>
+
+          <div className="mb-4 rounded-xl border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/20 px-4 py-3">
+            <p className="text-xs font-bold text-amber-800 dark:text-amber-400">
+              SIMULATED — NOT FOR PRODUCTION USE
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-500 mt-0.5">
+              Real backup restoration is not yet implemented. Nothing below reads or writes actual Firestore data.
+            </p>
           </div>
 
           {loadingPreview ? (
@@ -134,21 +144,25 @@ export function RestoreHistory({ history }: { history: BackupRecord[] }) {
                   <div className="bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-4 flex gap-3">
                     <CheckCircle2 className="h-5 w-5 text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" />
                     <div>
-                      <h4 className="font-bold text-emerald-800 dark:text-emerald-300">Dry Run Passed</h4>
+                      <h4 className="font-bold text-emerald-800 dark:text-emerald-300">Simulated Dry Run Passed</h4>
                       <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">
                         Conflicts: {dryRunRes.conflicts} &bull; Overwrites: {dryRunRes.overwrites} &bull; New Docs: {dryRunRes.newDocs}
                       </p>
+                      <p className="text-[11px] text-emerald-600/70 dark:text-emerald-500/70 mt-1">
+                        These numbers are simulated, not read from a real backup.
+                      </p>
                     </div>
                   </div>
-                  
+
                   <div className="flex gap-3 items-center">
                     <button
                       onClick={handleRestore}
-                      disabled={loadingRestore}
+                      disabled={loadingRestore || process.env.NODE_ENV === "production"}
+                      title={process.env.NODE_ENV === "production" ? "Disabled in production — restore is not implemented" : undefined}
                       className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl font-bold text-sm transition-colors disabled:opacity-50"
                     >
                       {loadingRestore ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCcw className="h-4 w-4" />}
-                      Confirm Restore
+                      {process.env.NODE_ENV === "production" ? "Restore Disabled (Not Implemented)" : "Run Simulated Restore"}
                     </button>
                     {restoreStatus && (
                       <span className={`text-sm font-bold ${restoreStatus.type === "success" ? "text-emerald-600" : "text-red-600"}`}>

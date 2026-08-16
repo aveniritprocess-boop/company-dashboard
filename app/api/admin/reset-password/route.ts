@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { verifyFirebaseToken, isHRLevel, isCEOorMD } from '@/lib/auth-middleware';
+import { verifyFirebaseToken, isHRLevelOrAbove, isCEOorMD } from '@/lib/auth-middleware';
 import { checkRateLimit } from '@/lib/rate-limiter';
 import { logActivityServer } from '@/lib/audit-server';
 import { ResetPasswordSchema } from '@/lib/validators/auth';
@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Too many requests. Please try again later.' }, { status: 429 });
         }
 
-        if (!isHRLevel(user.role)) {
+        if (!isHRLevelOrAbove(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only CEO, Admin, or HR can reset passwords' }, { status: 403 });
         }
 

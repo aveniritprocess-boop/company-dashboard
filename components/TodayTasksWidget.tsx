@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { subscribeToAllTasks, subscribeToAllTasksForUser, Task } from "@/lib/tasks";
-import { getAllUsers } from "@/lib/users";
+import { subscribeToAllUsers } from "@/lib/users";
 import {
     CheckCircle2,
     Clock,
@@ -23,21 +23,25 @@ export function TodayTasksWidget() {
 
     const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
-    // Load user names once (one-time fetch, not a real-time listener)
+    // Load user names once auth is ready; realtime so it recovers automatically
+    // if the initial subscribe races Firebase Auth's post-login state restore
+    // instead of leaving the name lookup permanently empty for the session.
     useEffect(() => {
-        getAllUsers()
-            .then((fetchedUsers) => {
-                if (!mountedRef.current) return;
-                const userMap: Record<string, string> = {};
-                fetchedUsers.forEach(u => {
-                    userMap[u.uid] = u.name || "Unknown User";
-                });
-                setUsers(userMap);
-            })
-            .catch(console.error);
+        if (!user) return;
+        // subscribeToAllUsers's own unsub() on cleanup guarantees no callbacks
+        // fire after this effect tears down — mountedRef (below) guards the
+        // separate tasks-subscription effect and must not be touched here, since
+        // that effect's cleanup only runs on actual component unmount.
+        const unsub = subscribeToAllUsers((fetchedUsers) => {
+            const userMap: Record<string, string> = {};
+            fetchedUsers.forEach(u => {
+                userMap[u.uid] = u.name || "Unknown User";
+            });
+            setUsers(userMap);
+        });
 
-        return () => { mountedRef.current = false; };
-    }, []);
+        return () => unsub();
+    }, [user]);
 
     useEffect(() => {
         if (!user) return;

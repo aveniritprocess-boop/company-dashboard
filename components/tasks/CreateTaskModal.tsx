@@ -5,10 +5,11 @@ import { useAuth } from "@/components/AuthProvider";
 import { Task, createTask, addTaskHistory, TaskStatus } from "@/lib/tasks";
 import { getTeamsForUser } from "@/lib/teams";
 import { Team } from "@/lib/roles";
-import { AppUserSummary, getAllUsers } from "@/lib/users";
+import { AppUserSummary, subscribeToAllUsers } from "@/lib/users";
 import { MentionTextarea, extractMentionedUsers } from "@/components/MentionTextarea";
 import { X, Loader2, Plus, Paperclip, Trash2 } from "lucide-react";
 import { CreateTaskSchema } from "@/lib/validators/task";
+import { uploadFile } from "@/lib/cloudinary";
 import { MultiSelect } from "@/components/ui/multi-select";
 import { Button } from "@/components/ui/button";
 
@@ -37,6 +38,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [employeeList, setEmployeeList] = useState<AppUserSummary[]>(users || []);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
 
   // Load user teams
   useEffect(() => {
@@ -50,23 +52,37 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
   useEffect(() => {
     if (users && users.length > 0) {
       setEmployeeList(users);
-    } else {
-      getAllUsers().then(setEmployeeList).catch((e) => console.error("Failed to load users for task modal", e));
+      return;
     }
-  }, [users]);
+    if (!user) return;
+    const unsub = subscribeToAllUsers(setEmployeeList);
+    return () => unsub();
+  }, [users, user]);
 
   if (!isOpen) return null;
 
-  const handleFileAttach = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileAttach = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
-    if (!files) return;
-    
-    const list = Array.from(files).map((file) => ({
-      name: file.name,
-      size: `${(file.size / 1024).toFixed(1)} KB`,
-      url: `https://mockfile.example.com/${encodeURIComponent(file.name)}`
-    }));
-    setAttachments((prev) => [...prev, ...list]);
+    if (!files || files.length === 0) return;
+    const fileList = Array.from(files);
+    e.target.value = ""; // allow re-selecting the same file later
+
+    setUploadingAttachments(true);
+    setError("");
+    try {
+      const uploaded = await Promise.all(
+        fileList.map(async (file) => ({
+          name: file.name,
+          size: `${(file.size / 1024).toFixed(1)} KB`,
+          url: await uploadFile(file),
+        }))
+      );
+      setAttachments((prev) => [...prev, ...uploaded]);
+    } catch (err: unknown) {
+      setError((err as Error).message || "Failed to upload one or more attachments.");
+    } finally {
+      setUploadingAttachments(false);
+    }
   };
 
   const handleRemoveAttachment = (index: number) => {
@@ -385,11 +401,12 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
             />
             <button
               type="button"
+              disabled={uploadingAttachments}
               onClick={() => document.getElementById("quick-task-file-uploader")?.click()}
-              className="flex items-center gap-1.5 px-3.5 py-2 border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary rounded-xl font-bold uppercase transition"
+              className="flex items-center gap-1.5 px-3.5 py-2 border border-dashed border-border hover:border-primary text-muted-foreground hover:text-primary rounded-xl font-bold uppercase transition disabled:opacity-50"
             >
-              <Plus className="h-3.5 w-3.5" />
-              Add Attachment File
+              {uploadingAttachments ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+              {uploadingAttachments ? "Uploading..." : "Add Attachment File"}
             </button>
           </div>
 
@@ -406,7 +423,7 @@ export function CreateTaskModal({ isOpen, onClose, onTaskCreated, users }: Creat
             </Button>
             <Button
               type="submit"
-              disabled={submitting}
+              disabled={submitting || uploadingAttachments}
               className="flex-1 flex items-center justify-center gap-1.5 px-4 py-5 rounded-xl bg-primary hover:bg-primary/90 text-primary-foreground font-bold text-xs uppercase transition-colors disabled:opacity-60"
             >
               {submitting && <Loader2 className="h-3 w-3 animate-spin" />}

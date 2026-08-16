@@ -13,7 +13,7 @@ import {
   PhoneMultiFactorGenerator,
   RecaptchaVerifier
 } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc } from "firebase/firestore";
 import { auth, db, googleProvider } from "@/lib/firebase";
 
 export default function LoginPage() {
@@ -197,31 +197,17 @@ export default function LoginPage() {
         throw new Error("Access Denied: Your account is locked or portal access is disabled. Please contact your administrator.");
       }
     } else {
-      // If user does not exist in directory, only Avenir IT Process manager email is allowed to auto-seed CEO
-      if (user.email === "avenir.itprocess@gmail.com") {
-        await setDoc(doc(db, "users", user.uid), {
-          uid: user.uid,
-          name: user.displayName || "Avenir IT Process",
-          email: user.email,
-          role: "ceo",
-          is_active: true,
-          portal_access: true,
-          is_locked: false,
-          is_deleted: false,
-          created_at: new Date(),
-          updated_at: new Date()
-        });
-      } else {
-        console.error("SIGNOUT_TRIGGERED");
-        console.trace();
-        await auth.signOut();
-        throw new Error("Access Denied: Your email is not registered in the company directory. Please contact your administrator.");
-      }
-    }
-
-    // Set Avenir IT Process email back to CEO role if altered
-    if (user.email === "avenir.itprocess@gmail.com" && userDoc.exists() && userDoc.data().role !== "ceo") {
-      await updateDoc(doc(db, "users", user.uid), { role: "ceo", is_active: true, portal_access: true });
+      // SEC-2 fix: previously this auto-seeded a hardcoded email as CEO on
+      // first sign-in, and a second block below silently restored that same
+      // email back to 'ceo' if it was ever changed. Both were client-reachable
+      // backdoors tied to one fixed address. Bootstrapping or recovering a
+      // CEO/Admin account must now go through a server-side Admin SDK script
+      // (see scripts/create_ceo.js / scripts/make_ceo_admin.js), which is not
+      // reachable from the client and requires direct service-account access.
+      console.error("SIGNOUT_TRIGGERED");
+      console.trace();
+      await auth.signOut();
+      throw new Error("Access Denied: Your email is not registered in the company directory. Please contact your administrator.");
     }
 
     // Log login event and capture the ID token for the session cookie

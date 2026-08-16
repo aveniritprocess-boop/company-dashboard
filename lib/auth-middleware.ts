@@ -111,6 +111,14 @@ export function isAdminLevel(userRole: string): boolean {
     return r === 'admin' || r === 'super_admin' || isCEOorMD(r);
 }
 
+// CEO, MD, Admin, or any HR variant — the "CEO/Admin/HR" tier used by the HR
+// operational routes (edit/toggle/restore/reset-password/send-welcome). Do NOT
+// use isHRLevel() alone for these: it deliberately excludes CEO/Admin and will
+// 403 the very roles that are supposed to have full access.
+export function isHRLevelOrAbove(userRole: string): boolean {
+    return isHRLevel(userRole) || isAdminLevel(userRole);
+}
+
 export function authorizeRole(userRole: string, requiredRole: string): { error: string; status: number } | null {
     const userRoleLower = userRole.toLowerCase();
     const reqRoleLower = requiredRole.toLowerCase();

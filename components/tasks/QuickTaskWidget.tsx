@@ -7,7 +7,7 @@ import {
   subscribeToAllTasksNoLimit, 
   subscribeToAllTasksForUser 
 } from "@/lib/tasks";
-import { getAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
 import { 
   Plus, 
   Eye, 
@@ -34,10 +34,14 @@ export function QuickTaskWidget() {
 
   const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
-  // Load all users for list & autocomplete
+  // Load all users for list & autocomplete once auth is ready; realtime so it
+  // recovers automatically if the initial subscribe races Firebase Auth's
+  // post-login state restore instead of failing silently for the whole session.
   useEffect(() => {
-    getAllUsers().then(setUsers).catch(console.error);
-  }, []);
+    if (!user) return;
+    const unsub = subscribeToAllUsers(setUsers);
+    return () => unsub();
+  }, [user]);
 
   // Subscribe to tasks in real time
   useEffect(() => {

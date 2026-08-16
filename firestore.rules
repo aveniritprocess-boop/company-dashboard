@@ -94,11 +94,14 @@ service cloud.firestore {
       );
       
       // Issue #2 Fix: Whitelist-based validation to prevent privilege escalation
+      // SEC-2 fix: the previous hardcoded-email bypass here granted unrestricted
+      // writes to ANY user document to a single fixed email address — a standing
+      // backdoor exploitable by anyone who compromises that account. Recovery of
+      // a locked-out CEO account must go through a server-side Admin SDK script
+      // (see scripts/make_ceo_admin.js), which bypasses these rules by design and
+      // is not reachable from the client.
       allow update: if isUserActive() && (
-        isAdmin() || 
-        // Allow the hardcoded root admin to restore their own CEO role
-        // Allow the hardcoded root admin to restore their own CEO role
-        request.auth.token.email == "avenir.itprocess@gmail.com" ||
+        isAdmin() ||
         (
           request.auth.uid == userId && 
           request.resource.data.diff(resource.data).affectedKeys().hasOnly([
@@ -191,8 +194,8 @@ service cloud.firestore {
         resource.data.assignedBy == request.auth.uid ||
         resource.data.assigned_by == request.auth.uid ||
         resource.data.createdBy == request.auth.uid ||
-        (isAssignedToUser(resource.data, request.auth.uid) && 
-         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at', 'progress', 'completedAt']) &&
+        (isAssignedToUser(resource.data, request.auth.uid) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updated_at', 'progress', 'completedAt', 'attachments']) &&
          request.resource.data.assignedTo == resource.data.assignedTo &&
          request.resource.data.assignedBy == resource.data.assignedBy)
       );

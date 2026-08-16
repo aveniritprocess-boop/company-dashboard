@@ -16,6 +16,37 @@ interface AuthContextType {
     rolesList: { id: string; name: string; permissions: Record<string, boolean>; is_system?: boolean }[];
 }
 
+// Permission set for the app's real system roles ('admin' | 'hr' | 'manager' |
+// 'employee' — see lib/validators/common.ts roleSchema). Used only when no
+// matching document exists in the Firestore `roles` collection for the
+// signed-in user's role; see the fallback comment at its usage site below.
+const SYSTEM_ROLE_FALLBACK_PERMISSIONS: Record<string, Record<string, boolean>> = {
+    admin: {
+        view_employees: true, add_employees: true, edit_employees: true, delete_employees: true,
+        export_data: true, import_data: true, view_salary: true, manage_payroll: true,
+        approve_leave: true, manage_attendance: true, manage_teams: true, manage_projects: true,
+        manage_settings: true,
+    },
+    hr: {
+        view_employees: true, add_employees: true, edit_employees: true, delete_employees: false,
+        export_data: true, import_data: true, view_salary: false, manage_payroll: false,
+        approve_leave: true, manage_attendance: true, manage_teams: false, manage_projects: false,
+        manage_settings: false,
+    },
+    manager: {
+        view_employees: true, add_employees: false, edit_employees: false, delete_employees: false,
+        export_data: false, import_data: false, view_salary: false, manage_payroll: false,
+        approve_leave: true, manage_attendance: true, manage_teams: true, manage_projects: true,
+        manage_settings: false,
+    },
+    employee: {
+        view_employees: true, add_employees: false, edit_employees: false, delete_employees: false,
+        export_data: false, import_data: false, view_salary: false, manage_payroll: false,
+        approve_leave: false, manage_attendance: false, manage_teams: false, manage_projects: false,
+        manage_settings: false,
+    },
+};
+
 const AuthContext = createContext<AuthContextType>({
     user: null,
     role: null,
@@ -144,7 +175,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Compute permissions matrix when role or rolesList changes
     const permissions = useMemo<Record<string, boolean>>(() => {
-        if (!role || rolesList.length === 0) {
+        if (!role) {
             return {};
         }
 
@@ -174,7 +205,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
 
         const match = rolesList.find(r => r.id === role);
-        return match ? (match.permissions || {}) : {};
+        if (match) return match.permissions || {};
+
+        // Fallback for the app's real system roles (admin/hr/manager/employee).
+        // The `roles` Firestore collection is keyed by a different, unrelated
+        // set of custom-role IDs (super_admin/hr_admin/hr_executive/...) and is
+        // never auto-seeded, so a doc matching the actual assigned role often
+        // doesn't exist. Without this fallback, Admin and HR users silently lost
+        // access to permission-gated UI (Add Employee, Export, Approve Leave,
+        // Settings) despite the backend already authorizing them for those
+        // actions — this is the fallback of last resort, not a replacement for
+        // custom roles created via the Roles & Permissions tab, which still win
+        // via the `match` lookup above when present.
+        return SYSTEM_ROLE_FALLBACK_PERMISSIONS[role.toLowerCase()] || {};
     }, [role, rolesList, isUltimateAdmin]);
 
     // Update last login timestamp — only runs once when user UID changes

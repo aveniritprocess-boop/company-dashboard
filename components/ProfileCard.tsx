@@ -3,15 +3,31 @@
 import { useAuth } from "@/components/AuthProvider";
 import { ProfileImageUploader } from "./ProfileImageUploader";
 import { CalendarDays, Mail } from "lucide-react";
+import { useEffect, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export function ProfileCard() {
     const { user } = useAuth();
+    const [joiningDate, setJoiningDate] = useState<string | null>(null);
 
-    // Create a join date string (mocked as user creation time usually not available in basic user object without admin SDK or extra calls)
-    // But we can just use current year or leave it out if not essential. Let's use a nice reliable placeholder or real data if we had it.
-    const joinDate = user?.metadata?.creationTime
-        ? new Date(user.metadata.creationTime).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
-        : "Member";
+    useEffect(() => {
+        if (!user) return;
+        const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
+            setJoiningDate(snap.exists() ? (snap.data().joining_date as string | undefined) || null : null);
+        });
+        return () => unsub();
+    }, [user]);
+
+    // Prefer the employee's actual joining_date from Firestore. Only fall
+    // back to the Firebase Auth account-creation timestamp — which is not a
+    // real HR join date and can diverge from it (password resets, migrated
+    // accounts, etc.) — when no joining_date is on record at all.
+    const joinDate = joiningDate
+        ? new Date(joiningDate).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+        : user?.metadata?.creationTime
+            ? new Date(user.metadata.creationTime).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+            : "Member";
 
     return (
         <div className="bg-white dark:bg-slate-900 shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 rounded-3xl overflow-hidden transition-all duration-300 hover:shadow-2xl">

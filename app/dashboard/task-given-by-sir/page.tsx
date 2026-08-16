@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 import { RoleGuard } from "@/components/RoleGuard";
 import { createTask, subscribeToTasksAssignedBy, subscribeToAllTasks, Task } from "@/lib/tasks";
-import { getAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
 import { QueryDocumentSnapshot, DocumentData } from "firebase/firestore";
 import {
     UserCheck,
@@ -49,21 +49,18 @@ function TaskGivenContent() {
         setTimeout(() => setToast(null), 3500);
     };
 
-    const fetchUsers = useCallback(async () => {
-        try {
-            const users = await getAllUsers();
-            // Show all users except current admin if needed, or just all users
-            setEmployees(users.filter((u) => u.uid !== user?.uid));
-        } catch {
-            showToast("Failed to load employees.", "error");
-        } finally {
-            setLoadingUsers(false);
-        }
-    }, [user?.uid]);
-
+    // Load employees once auth is ready; realtime so it recovers automatically
+    // if the initial subscribe races Firebase Auth's post-login state restore,
+    // instead of surfacing a spurious "Failed to load employees" error toast
+    // for what was actually a transient, self-correcting timing issue.
     useEffect(() => {
-        fetchUsers();
-    }, [fetchUsers]);
+        if (!user) return;
+        const unsub = subscribeToAllUsers((users) => {
+            setEmployees(users.filter((u) => u.uid !== user.uid));
+            setLoadingUsers(false);
+        });
+        return () => unsub();
+    }, [user]);
 
     useEffect(() => {
         if (!user || !role) return;

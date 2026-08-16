@@ -15,7 +15,7 @@ import {
   subscribeToRecentDiaryEntriesForUser,
   DailyDiaryEntry 
 } from "@/lib/dailyDiary";
-import { getAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
 import {
   Plus, 
   Grid, 
@@ -82,10 +82,13 @@ export function TasksHub({ defaultTab = "dashboard" }: TasksHubProps) {
 
   const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
-  // Load user dictionary on mount
+  // Load user dictionary once auth is ready; realtime so it recovers automatically
+  // if the initial subscribe races Firebase Auth's post-login state restore.
   useEffect(() => {
-    getAllUsers().then(setUsers).catch(console.error);
-  }, []);
+    if (!user) return;
+    const unsub = subscribeToAllUsers(setUsers);
+    return () => unsub();
+  }, [user]);
 
   // Listen to tasks in real time
   useEffect(() => {

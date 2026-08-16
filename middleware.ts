@@ -21,7 +21,12 @@ export async function middleware(request: NextRequest) {
         return NextResponse.redirect(new URL('/dashboard', request.url));
     }
 
-    return NextResponse.next();
+    // Forward the current pathname so server components (e.g. dashboard/layout.tsx)
+    // can enforce the must_change_password redirect without a loop on the
+    // update-password page itself.
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set('x-pathname', pathname);
+    return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 // Match dashboard and login routes only

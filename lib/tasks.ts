@@ -229,6 +229,39 @@ export async function updateTaskStatus(
   }
 }
 
+export async function updateTaskAttachments(
+  taskId: string,
+  attachments: { name: string; size: string; url: string; }[],
+  operatorId?: string,
+  operatorName?: string
+) {
+  const taskRef = doc(db, TASKS_COLLECTION, taskId);
+  const now = serverTimestamp();
+
+  await updateDoc(taskRef, {
+    attachments,
+    updatedAt: now,
+    updated_at: now,
+  });
+
+  try {
+    const user = auth.currentUser;
+    const performedBy = operatorId || user?.uid || "system";
+    const performedByName = operatorName || user?.displayName || user?.email || "Employee";
+    await logActivityClient({
+      action: "task_updated",
+      performedBy,
+      performedByName,
+      targetId: taskId,
+      targetType: "task",
+      details: `Updated task attachments (${attachments.length} file${attachments.length === 1 ? "" : "s"}).`,
+      metadata: { attachmentCount: attachments.length }
+    });
+  } catch (auditErr) {
+    console.error("Failed to log updateTaskAttachments audit:", auditErr);
+  }
+}
+
 export async function updateTaskProgress(
   taskId: string, 
   progress: number, 

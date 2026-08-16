@@ -25,6 +25,16 @@ export async function POST(request: NextRequest) {
 
         // 2. Parse and validate body
         const body = await request.json();
+
+        // Reject dev-only mock/seed data in production. Checked against the
+        // raw body (before Zod strips unrecognized keys) so this can't be
+        // bypassed by omitting the marker from the validated payload shape.
+        // This is the authoritative, server-side enforcement — the client-side
+        // seed button is disabled too, but that alone is not security.
+        if (body?.isMockSeed === true && process.env.NODE_ENV === 'production') {
+            return NextResponse.json({ success: false, error: 'Mock employee seeding is disabled in production.' }, { status: 403 });
+        }
+
         const validation = parseOrError(CreateEmployeeSchema, body);
         if ('response' in validation) return validation.response;
         const data = validation.data;
@@ -115,6 +125,17 @@ export async function POST(request: NextRequest) {
             status: status || "active",
             is_active: is_active !== undefined ? is_active : true,
             portal_access: portal_access !== undefined ? portal_access : true,
+            // These fields are required by lib/search/employee-search.ts's query
+            // filters (is_deleted is required by every search, since it's always
+            // applied as a base filter) — without them here, employee_directory
+            // docs never match `where("is_deleted", "==", false)` and search
+            // silently returns zero results.
+            is_deleted: false,
+            is_locked: is_locked !== undefined ? is_locked : false,
+            employee_type: employee_type || "permanent",
+            joining_date: joining_date || new Date().toISOString().split("T")[0],
+            mobile: mobile || "",
+            employee_id: employee_id || "",
         });
         
         await batch.commit();

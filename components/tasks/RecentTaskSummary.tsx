@@ -14,7 +14,7 @@ import {
   subscribeToRecentDiaryEntriesForUser,
   DailyDiaryEntry,
 } from "@/lib/dailyDiary";
-import { getAllUsers, AppUserSummary } from "@/lib/users";
+import { subscribeToAllUsers, AppUserSummary } from "@/lib/users";
 import {
   Search,
   Filter,
@@ -135,10 +135,13 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
   const isAdminOrManager = role === "admin" || role === "ceo" || role === "md" || role === "manager";
   const isAdmin = role === "admin" || role === "ceo" || role === "md" || role === "super_admin";
 
-  // Load users once
+  // Load users once auth is ready; realtime so it recovers automatically if the
+  // initial subscribe races Firebase Auth's post-login state restore.
   useEffect(() => {
-    getAllUsers().then(setUsers).catch(console.error);
-  }, []);
+    if (!user) return;
+    const unsub = subscribeToAllUsers(setUsers);
+    return () => unsub();
+  }, [user]);
 
   // Subscribe to tasks
   useEffect(() => {
