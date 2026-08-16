@@ -371,9 +371,14 @@ function TaskGivenContent() {
     );
 }
 
+// Task assignment is deliberately role-independent: any authenticated, active
+// portal user may assign a task to any other legitimate user. RoleGuard is kept
+// without allowedRoles so it still requires a provisioned role (i.e. a real
+// directory user) but applies no role restriction. This mirrors the Firestore
+// rule for tasks, `allow create: if isUserActive()`.
 export default function TaskGivenBySirPage() {
     return (
-        <RoleGuard allowedRoles={["admin", "manager", "ceo", "md"]} fallbackPath="/dashboard">
+        <RoleGuard fallbackPath="/dashboard">
             <TaskGivenContent />
         </RoleGuard>
     );
