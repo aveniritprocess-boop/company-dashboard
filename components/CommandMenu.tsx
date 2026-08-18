@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { isManagerTierOrAbove } from "@/lib/roles";
 import { useRouter } from "next/navigation";
 import {
     Search,
@@ -46,7 +47,7 @@ export function CommandMenu() {
         { name: "View Your Tasks", href: "/dashboard/your-tasks", icon: CheckSquare, category: "Work" },
         { name: "Daily Diary", href: "/dashboard/daily-diary", icon: Calendar, category: "Work" },
         { name: "Settings", href: "/dashboard/settings", icon: Settings, category: "System" },
-        ...(role === "admin" || role === "manager" || role === "ceo" || role === "md" ? [
+        ...(isManagerTierOrAbove(role) ? [
             { name: "Task Assigned", href: "/dashboard/tasks-assigned", icon: Users, category: "Admin" }
         ] : []),
     ];

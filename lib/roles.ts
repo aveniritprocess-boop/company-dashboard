@@ -1,4 +1,7 @@
-export type UserRole = "ceo" | "md" | "admin" | "manager" | "hr" | "team_lead" | "employee";
+// Business hierarchy: employee < team_lead < manager < agm < md < ceo
+// 'agm' sits above manager and below md/ceo. It deliberately does NOT inherit
+// CEO/MD-tier powers (role management, backup/restore, monitoring).
+export type UserRole = "ceo" | "md" | "agm" | "admin" | "manager" | "hr" | "team_lead" | "employee";
 
 export interface AppUser {
   uid: string;
@@ -88,6 +91,23 @@ export const PERMISSIONS: Record<string, Record<string, boolean>> = {
     canDeleteTasks: false,
     canAccessAdminSettings: false,
   },
+  // AGM sits directly above manager. It gets everything a manager can do, plus
+  // org-wide visibility (it is an oversight role), but deliberately NOT the
+  // CEO/MD-tier capabilities: no user management, no role management, no
+  // admin settings, no task deletion.
+  agm: {
+    canManageUsers: false,
+    canManageTeams: true,
+    canManageProjects: true,
+    canViewAllTasks: true, // wider than manager: org-wide task visibility
+    canEditSirTasks: false,
+    canAssignTasks: true,
+    canUpdateTaskStatus: true,
+    canViewAllEmployees: true, // wider than manager: can see the full directory
+    canDeleteTasks: false,
+    canManageRoles: false,
+    canAccessAdminSettings: false,
+  },
   hr: {
     canManageUsers: true,
     canManageTeams: false,
@@ -121,3 +141,30 @@ export const PERMISSIONS: Record<string, Record<string, boolean>> = {
     canViewOwnTasksOnly: true,
   },
 };
+
+// ─── Role hierarchy helpers ──────────────────────────────────────────────
+// Business hierarchy: employee < team_lead < manager < agm < md < ceo
+// ('admin' and 'hr' are functional roles that sit alongside, not inside, that
+// line — admin is treated as CEO-tier for access, hr as a specialist tier.)
+//
+// Use these instead of scattering `role === "manager" || role === "ceo" || ...`
+// comparisons, which is how 'md' silently ended up excluded from several pages.
+
+const CEO_TIER: readonly string[] = ["ceo", "md", "super_admin"];
+const ADMIN_TIER: readonly string[] = [...CEO_TIER, "admin"];
+const MANAGER_TIER: readonly string[] = [...ADMIN_TIER, "agm", "manager"];
+
+/** CEO/MD-level: the highest authority. Grants role changes, backup, monitoring. */
+export function isCeoTier(role?: string | null): boolean {
+  return !!role && CEO_TIER.includes(role.toLowerCase());
+}
+
+/** Admin-or-above: CEO/MD plus 'admin'. */
+export function isAdminTierOrAbove(role?: string | null): boolean {
+  return !!role && ADMIN_TIER.includes(role.toLowerCase());
+}
+
+/** Manager-or-above: adds 'agm' and 'manager'. Team/project/oversight surfaces. */
+export function isManagerTierOrAbove(role?: string | null): boolean {
+  return !!role && MANAGER_TIER.includes(role.toLowerCase());
+}

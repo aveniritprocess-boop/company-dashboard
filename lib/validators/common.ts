@@ -35,9 +35,16 @@ export const passwordSchema = z
 
 // ─── Enum Schemas (Zod v4 compatible) ────────────────────────────────────
 
+// Must stay in sync with UserRole in lib/roles.ts. 'md', 'agm' and 'team_lead'
+// existed in UserRole/PERMISSIONS but were missing here, which meant the admin
+// APIs rejected them outright — MD was effectively unassignable via the UI.
+// NOTE: 'md' is CEO-tier in firestore.rules (isCEO() matches ceo OR md), so the
+// CEO-only guard in update-employee/approve-change covers 'md' as well as
+// 'ceo'/'admin' — otherwise making it assignable here would open a privilege
+// escalation path.
 export const roleSchema = z
-    .enum(['ceo', 'admin', 'hr', 'manager', 'employee'])
-    .refine(Boolean, { message: 'Role must be one of: ceo, admin, hr, manager, employee' });
+    .enum(['ceo', 'md', 'agm', 'admin', 'hr', 'manager', 'team_lead', 'employee'])
+    .refine(Boolean, { message: 'Role must be one of: ceo, md, agm, admin, hr, manager, team_lead, employee' });
 
 export const genderSchema = z
     .enum(['male', 'female', 'non-binary', 'prefer-not-to-say'])

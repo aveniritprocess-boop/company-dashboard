@@ -39,6 +39,14 @@ const SYSTEM_ROLE_FALLBACK_PERMISSIONS: Record<string, Record<string, boolean>> 
         approve_leave: true, manage_attendance: true, manage_teams: true, manage_projects: true,
         manage_settings: false,
     },
+    // AGM: above manager, below md/ceo. Manager's capabilities plus org-wide
+    // visibility (view/export the directory), but no user/role management.
+    agm: {
+        view_employees: true, add_employees: false, edit_employees: false, delete_employees: false,
+        export_data: true, import_data: false, view_salary: false, manage_payroll: false,
+        approve_leave: true, manage_attendance: true, manage_teams: true, manage_projects: true,
+        manage_settings: false,
+    },
     employee: {
         view_employees: true, add_employees: false, edit_employees: false, delete_employees: false,
         export_data: false, import_data: false, view_salary: false, manage_payroll: false,

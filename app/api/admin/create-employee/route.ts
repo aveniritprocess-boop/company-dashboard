@@ -46,8 +46,9 @@ export async function POST(request: NextRequest) {
             profile_photo, gender, status
         } = data;
 
-        // Security role restriction: only CEO can create/assign 'ceo' or 'admin' roles
-        if ((role === 'ceo' || role === 'admin') && user.role.toLowerCase() !== 'ceo') {
+        // Security role restriction: only CEO can create/assign CEO-tier roles.
+        // 'md' included: firestore.rules treats it as CEO-equivalent.
+        if (['ceo', 'md', 'admin'].includes(role || '') && user.role.toLowerCase() !== 'ceo') {
             return NextResponse.json({ success: false, error: 'Forbidden: Only the CEO can create Admin or CEO accounts' }, { status: 403 });
         }
 

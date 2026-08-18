@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { isAdminTierOrAbove, isManagerTierOrAbove } from "@/lib/roles";
 import {
   LayoutDashboard,
   BarChart,
@@ -62,11 +63,15 @@ export function Sidebar() {
     { name: "Task Summary", href: "/dashboard/task-summary", icon: BarChart2 },
     { name: "Shared Sheet", href: "/dashboard/sheet", icon: TableProperties },
     { name: "Assign Tasks", href: "/dashboard/tasks-assigned", icon: UserCheck },
-    ...(role === "admin" || role === "ceo" || role === "md"
+    // Directory visibility: admin tier, plus AGM and HR (both have
+    // canViewAllEmployees). Write actions on that page remain gated separately
+    // by hasPermission(), so AGM/HR see it read-only unless permitted.
+    ...(isAdminTierOrAbove(role) || role === "agm" || role === "hr"
       ? [{ name: "Employees", href: "/dashboard/employees", icon: Users }]
       : []),
     { name: "Attendance", href: "/dashboard/attendance", icon: CalendarClock },
-    ...(role === "admin" || role === "manager" || role === "ceo" || role === "md"
+    // Manager tier and above (includes AGM) get team/project management.
+    ...(isManagerTierOrAbove(role)
       ? [
         { name: "Teams", href: "/dashboard/teams", icon: Users },
         { name: "Projects", href: "/dashboard/projects", icon: FolderGit2 }
@@ -176,7 +181,10 @@ export function Sidebar() {
             label: "Main Menu",
             items: navigation.filter(i => ["Dashboard", "Daily Summary", "Your Tasks", "Task Summary", "Assign Tasks", "Shared Sheet", "Attendance", "Progress"].includes(i.name))
           },
-          ...(role === "admin" || role === "manager" || role === "ceo" || role === "md" ? [
+          // Manager tier and above (includes AGM), plus HR for directory access.
+          // Without this the individual links above would be filtered into a
+          // section that never renders.
+          ...(isManagerTierOrAbove(role) || role === "hr" ? [
             {
               label: "Management",
               items: navigation.filter(i => ["Employees", "Teams", "Projects", "Locations"].includes(i.name))

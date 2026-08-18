@@ -54,7 +54,9 @@ export async function POST(request: NextRequest) {
 
         // Security role restriction: only CEO can approve a change that grants 'ceo' or 'admin'
         const requestedRole = requestData.changes?.role;
-        if (action === 'approve' && (requestedRole === 'ceo' || requestedRole === 'admin') && !isCEOorMD(user.role)) {
+        // 'md' included: firestore.rules treats it as CEO-equivalent, so granting
+        // it must require the same authority as granting 'ceo'/'admin'.
+        if (action === 'approve' && ['ceo', 'md', 'admin'].includes(requestedRole) && !isCEOorMD(user.role)) {
             return NextResponse.json({ error: 'Forbidden: Only the CEO can approve a change that grants Admin or CEO role' }, { status: 403 });
         }
 

@@ -71,10 +71,13 @@ export async function POST(request: NextRequest) {
             exit_details
         } = validation.data;
 
-        // Security role restriction: only CEO can grant/change to 'ceo' or 'admin' roles
-        // (mirrors the same restriction enforced in create-employee)
-        if (role !== undefined && (role === 'ceo' || role === 'admin') && role !== oldData.role && !isCEOorMD(user.role)) {
-            return NextResponse.json({ error: 'Forbidden: Only the CEO can grant Admin or CEO roles' }, { status: 403 });
+        // Security role restriction: only CEO can grant/change to CEO-tier roles.
+        // 'md' is included because firestore.rules treats it as CEO-equivalent
+        // (isCEO() matches 'ceo' OR 'md'), so allowing a non-CEO to grant 'md'
+        // would be a privilege-escalation path around this very check.
+        const CEO_TIER_ROLES = ['ceo', 'md', 'admin'];
+        if (role !== undefined && CEO_TIER_ROLES.includes(role) && role !== oldData.role && !isCEOorMD(user.role)) {
+            return NextResponse.json({ error: 'Forbidden: Only the CEO can grant Admin, MD, or CEO roles' }, { status: 403 });
         }
 
         const updatePayload: Record<string, unknown> = {

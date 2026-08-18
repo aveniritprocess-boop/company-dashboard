@@ -16,7 +16,7 @@ import { searchTeams } from "@/lib/search/team-search";
 import { defaultTeamSearchParams } from "@/lib/search/search-types";
 import { AppUserSummary } from "@/lib/users";
 import { Task } from "@/lib/tasks";
-import { Project, Team } from "@/lib/roles";
+import { Project, Team, isManagerTierOrAbove } from "@/lib/roles";
 import { SearchItem } from "./SearchResultItem";
 import { SearchGroupItem, SearchGroup } from "./SearchGroupItem";
 
@@ -79,7 +79,9 @@ export function SearchDialog({ isOpen, onClose }: { isOpen: boolean, onClose: ()
     { id: "p4", title: "Settings", category: "Page", link: "/dashboard/settings", icon: <Settings className="h-4 w-4" /> },
   ];
 
-  if (role === "admin" || role === "ceo" || role === "manager") {
+  // Was missing 'md' entirely (and AGM did not exist) — now driven by the
+  // shared hierarchy helper so new tiers cannot be silently omitted again.
+  if (isManagerTierOrAbove(role)) {
     pages.push({ id: "p5", title: "Task Assigned", category: "Page", link: "/dashboard/tasks-assigned", icon: <Users className="h-4 w-4" /> });
     pages.push({ id: "p6", title: "Employee Management", category: "Page", link: "/dashboard/employees", icon: <Users className="h-4 w-4" /> });
   }

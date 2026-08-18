@@ -1,6 +1,7 @@
 "use client";
 
 import { useAuth } from "@/components/AuthProvider";
+import { isManagerTierOrAbove } from "@/lib/roles";
 import {
   ClipboardList,
   BarChart3,
@@ -20,7 +21,7 @@ export function DashboardShortcuts() {
       icon: ClipboardList,
       theme: "blue" as const,
     },
-    ...(role === "admin" || role === "ceo" || role === "md" || role === "manager"
+    ...(isManagerTierOrAbove(role)
       ? [{
         name: "Task Assigned",
         href: "/dashboard/tasks-assigned",
