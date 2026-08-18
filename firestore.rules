@@ -33,8 +33,13 @@ service cloud.firestore {
       return isCEO() || isRole('admin') || isRole('super_admin');
     }
     
+    // AGM sits directly above manager in the business hierarchy
+    // (employee < team_lead < manager < agm < md < ceo). It is granted exactly
+    // manager-level database access and is deliberately NOT part of isAdmin()
+    // or isCEO(), so it gains no role management, no user-document writes, and
+    // no backup/monitoring access.
     function isManager() {
-      return isRole('manager');
+      return isRole('manager') || isRole('agm');
     }
 
     function isHR() {
