@@ -19,10 +19,11 @@ import { monitorQuery } from "./firestore-monitor";
 export interface AttendanceSession {
   id: string;
   clockInAt: Timestamp;
-  clockOutAt: Timestamp | null;
+  // Optional: absent on an active session (see startSession), added at clock-out.
+  clockOutAt?: Timestamp | null;
   clockInImageUrl: string;
   clockOutImageUrl: string | null;
-  durationSeconds: number | null;
+  durationSeconds?: number | null;
   status: "active" | "completed";
 }
 
@@ -144,13 +145,25 @@ export async function startSession(userId: string, imageUrl: string, userName?: 
     // Generate new session reference
     const newSessionRef = doc(collection(db, "users", userId, "attendance"));
     
-    // 1. Write the new attendance session
+    // 1. Write the new attendance session.
+    //
+    // clockOutAt and durationSeconds are deliberately NOT written here. The
+    // Firestore rule for this path enforces
+    //   !request.resource.data.keys().hasAny(['durationSeconds', 'clockOutAt'])
+    // so that a record cannot be created pre-completed. A field set to null is
+    // still a PRESENT key as far as keys() is concerned, so writing them as null
+    // placeholders tripped that check and every clock-in was rejected with
+    // "Missing or insufficient permissions".
+    //
+    // Both fields are added by endSession() at clock-out, which the update rule
+    // explicitly permits via its ['clockOutAt', 'clockOutImageUrl',
+    // 'durationSeconds', 'status'] whitelist. Every consumer reads these with a
+    // truthiness/optional-chaining check, so an absent key behaves exactly as
+    // the previous null did.
     transaction.set(newSessionRef, {
       clockInAt: serverTimestamp(),
-      clockOutAt: null,
       clockInImageUrl: imageUrl,
       clockOutImageUrl: null,
-      durationSeconds: null,
       status: "active",
       createdAt: serverTimestamp(),
     });
