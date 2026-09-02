@@ -57,13 +57,21 @@ service cloud.firestore {
              (taskData.assigned_to is list && userId in taskData.assigned_to);
     }
     
+    // Tasks are company-wide readable by any active employee.
+    //
+    // This is deliberate: the Recent Tasks feed is a company-wide activity view,
+    // so a task between two other people must be visible to everyone. The
+    // previous rule limited reads to admins, the assigner and the assignees,
+    // which meant a non-admin's company-wide query was rejected outright
+    // (Firestore fails the whole query if any matched document is unreadable) —
+    // tasks generated notifications but never appeared in the feed.
+    //
+    // Scope of this change is READ on /tasks only. Task create/update/delete
+    // rules are unchanged, and no other collection is affected: a user still
+    // cannot edit a task they do not own, change roles, or read private
+    // collections such as users, audit_logs or attendance.
     function canReadTask() {
-      return isUserActive() && (
-        isAdmin() ||
-        resource.data.assignedBy == request.auth.uid ||
-        resource.data.assigned_by == request.auth.uid ||
-        isAssignedToUser(resource.data, request.auth.uid)
-      );
+      return isUserActive();
     }
 
     // For subcollection reads where we need to check the parent task

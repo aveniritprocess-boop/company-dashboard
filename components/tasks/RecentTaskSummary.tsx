@@ -5,7 +5,6 @@ import { useAuth } from "@/components/AuthProvider";
 import {
   Task,
   subscribeToRecentTasks,
-  subscribeToRecentTasksForUser,
   updateTaskStatus,
   addTaskHistory,
 } from "@/lib/tasks";
@@ -115,7 +114,7 @@ interface RecentTaskSummaryProps {
   timeWindowDays?: number;
 }
 
-export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: RecentTaskSummaryProps) {
+export function RecentTaskSummary({ showDiary = true, timeWindowDays = 30 }: RecentTaskSummaryProps) {
   // Removed trace
   const { user, role } = useAuth();
 
@@ -143,23 +142,24 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
     return () => unsub();
   }, [user]);
 
-  // Subscribe to tasks
+  // Subscribe to tasks.
+  //
+  // This is the company-wide activity feed, so every active employee subscribes
+  // to the same company-wide query. Previously only admins did; everyone else
+  // got subscribeToRecentTasksForUser(), which returns only tasks they assigned
+  // or were assigned. That is why a task between two other people produced a
+  // notification but never showed up here.
+  //
+  // Personal scoping is unchanged elsewhere: "assigned to me" / "assigned by me"
+  // views still use subscribeToAllTasksForUser and friends.
   useEffect(() => {
     if (!user) return;
-    let unsub: () => void;
-    if (isAdmin) {
-      unsub = subscribeToRecentTasks(timeWindowDays, (data) => {
-        setTasks(data);
-        setLoading(false);
-      });
-    } else {
-      unsub = subscribeToRecentTasksForUser(user.uid, timeWindowDays, (data) => {
-        setTasks(data);
-        setLoading(false);
-      });
-    }
+    const unsub = subscribeToRecentTasks(timeWindowDays, (data) => {
+      setTasks(data);
+      setLoading(false);
+    });
     return () => unsub?.();
-  }, [user, role, timeWindowDays, isAdmin]);
+  }, [user, timeWindowDays]);
 
   // Subscribe to diary entries
   useEffect(() => {
@@ -297,7 +297,7 @@ export function RecentTaskSummary({ showDiary = true, timeWindowDays = 2 }: Rece
                 Recent Tasks Summary
               </h2>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Overview of tasks & diary entries from the last {timeWindowDays * 24} hours
+                Overview of tasks & diary entries from the last {timeWindowDays === 30 ? "1 month" : `${timeWindowDays} days`}
                 {" · "}
                 <span className="font-semibold text-indigo-600 dark:text-indigo-400">{filteredRows.length} items</span>
               </p>

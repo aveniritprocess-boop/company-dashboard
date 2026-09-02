@@ -61,7 +61,7 @@ export default function DashboardPage() {
             </div>
 
             <div className="mb-8">
-                <RecentTaskSummary showDiary={true} timeWindowDays={2} />
+                <RecentTaskSummary showDiary={true} timeWindowDays={30} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
