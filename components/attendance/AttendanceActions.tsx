@@ -20,20 +20,40 @@ export function AttendanceActions() {
     if (!user) return;
     setProcessing(true);
     setError("");
+
+    // Track which step we are on. Previously every failure collapsed into one
+    // generic message, so a camera problem, an upload rejection and a Firestore
+    // permission error were indistinguishable — which made this issue very hard
+    // to diagnose. The stage name is not sensitive and is safe to show.
+    const isClockOut = activeSession?.status === "active";
+    let stage = isClockOut ? "preparing clock-out" : "preparing clock-in";
+
     try {
+      stage = "uploading the verification photo";
       const imageUrl = await uploadImage(file);
-      
+
+      stage = isClockOut ? "saving your clock-out" : "saving your clock-in";
       if (activeSession && activeSession.status === "active") {
         await endSession(user.uid, activeSession.id, imageUrl, user.displayName || "User");
       } else {
         await startSession(user.uid, imageUrl, user.displayName || "User");
       }
-      
-      await refreshSession(); 
+
+      stage = "refreshing your attendance status";
+      await refreshSession();
       setShowCamera(false);
     } catch (err: unknown) {
-      console.error("Error processing attendance:", err);
-      setError("Failed to process attendance. Please try again.");
+      // Full technical detail (stack, Firebase error object) goes to the console
+      // only — never rendered into the page.
+      console.error(`[attendance] failed while ${stage}:`, err);
+
+      // Shown to the user: the stage plus a short reason code. Firebase/Cloudinary
+      // codes such as "permission-denied" or "HTTP 401" are diagnostic but contain
+      // no secrets, tokens, or user data.
+      const e = err as { code?: string; message?: string };
+      const reason = e?.code || e?.message || "unknown error";
+      const shortReason = reason.length > 160 ? `${reason.slice(0, 160)}…` : reason;
+      setError(`Couldn't complete attendance while ${stage}. Reason: ${shortReason}`);
     } finally {
       setProcessing(false);
     }

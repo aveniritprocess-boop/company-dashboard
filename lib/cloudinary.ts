@@ -20,9 +20,25 @@ export async function uploadImage(file: File): Promise<string> {
     }),
   });
 
+  // Surface the actual failure reason. Previously any non-OK response fell
+  // through to a bare "Failed to get upload signature", which hid the HTTP
+  // status (e.g. 401 from an expired/revoked session) and made upload failures
+  // effectively undiagnosable from the UI. The signature itself is never logged.
+  if (!signResponse.ok) {
+    let serverMessage = "";
+    try {
+      serverMessage = (await signResponse.json())?.error || "";
+    } catch {
+      // non-JSON error body; status alone is still useful
+    }
+    throw new Error(
+      `Image signing failed (HTTP ${signResponse.status})${serverMessage ? `: ${serverMessage}` : ""}`
+    );
+  }
+
   const { signature } = await signResponse.json();
   if (!signature) {
-    throw new Error("Failed to get upload signature");
+    throw new Error("Image signing succeeded but returned no signature");
   }
 
   // 2. Upload to Cloudinary
@@ -30,7 +46,9 @@ export async function uploadImage(file: File): Promise<string> {
   const apiKey = process.env.NEXT_PUBLIC_CLOUDINARY_API_KEY;
 
   if (!cloudName || !apiKey) {
-    throw new Error("Cloudinary configuration missing");
+    throw new Error(
+      `Cloudinary config missing in this environment (cloudName=${cloudName ? "set" : "MISSING"}, apiKey=${apiKey ? "set" : "MISSING"})`
+    );
   }
 
   const formData = new FormData();
@@ -48,11 +66,23 @@ export async function uploadImage(file: File): Promise<string> {
   );
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "Upload failed");
+    // Include the HTTP status: a bare err.error?.message was often undefined
+    // (e.g. on 401 signature mismatch), collapsing to an unhelpful "Upload failed".
+    let cloudinaryMessage = "";
+    try {
+      cloudinaryMessage = (await response.json())?.error?.message || "";
+    } catch {
+      // non-JSON body
+    }
+    throw new Error(
+      `Cloudinary upload failed (HTTP ${response.status})${cloudinaryMessage ? `: ${cloudinaryMessage}` : ""}`
+    );
   }
 
   const data = await response.json();
+  if (!data.secure_url) {
+    throw new Error("Cloudinary upload returned no secure_url");
+  }
   return data.secure_url;
 }
 

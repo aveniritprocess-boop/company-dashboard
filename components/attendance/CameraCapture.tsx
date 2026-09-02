@@ -10,32 +10,61 @@ interface CameraCaptureProps {
 
 export function CameraCapture({ onCapture, onCancel }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  // Held in a ref as well as state: the unmount cleanup below runs with an empty
+  // dependency array, so it closes over the FIRST render's value. Reading the
+  // stream from state there always saw null and the camera tracks were never
+  // stopped — leaving the device camera (and its indicator light) running after
+  // the capture UI closed. A ref is not captured by that stale closure.
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+  };
 
   const startCamera = async () => {
     try {
+      // Release any previous stream before requesting a new one, so retrying
+      // cannot leave an orphaned track running.
+      stopCamera();
       const mediaStream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user" }
       });
-      setStream(mediaStream);
+      streamRef.current = mediaStream;
       if (videoRef.current) {
         videoRef.current.srcObject = mediaStream;
       }
       setError(null);
     } catch (err) {
-      console.error("Error accessing camera:", err);
-      setError("Unable to access camera. Please allow camera permissions.");
+      console.error("[attendance] camera initialisation failed:", err);
+
+      // getUserMedia failures are not all permission problems. Reporting every
+      // one as "allow camera permissions" sent diagnosis down the wrong path,
+      // so distinguish the standard DOMException names. None of these expose
+      // sensitive data.
+      const name = (err as { name?: string })?.name || "";
+      const detail =
+        name === "NotAllowedError"
+          ? "Camera permission was denied. Allow camera access for this site in your browser, then retry."
+          : name === "NotFoundError" || name === "OverconstrainedError"
+          ? "No camera was found on this device."
+          : name === "NotReadableError"
+          ? "The camera is already in use by another application. Close it and retry."
+          : name === "SecurityError"
+          ? "The browser blocked camera access for this page (insecure context or permissions policy)."
+          : `Unable to access camera${name ? ` (${name})` : ""}.`;
+
+      setError(detail);
     }
   };
 
   useEffect(() => {
     startCamera();
     return () => {
-      // Cleanup stream on unmount
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
+      stopCamera();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
